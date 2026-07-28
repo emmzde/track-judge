@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trackjudge"
-description = "A Windows desktop app and Python CLI that compares audio candidates and keeps the best source."
+description = "A Windows desktop application that compares audio candidates and saves the best-quality source."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 dynamic = ["version"]
-keywords = ["audio", "cli", "dsp", "spectrogram", "yt-dlp"]
+keywords = ["audio", "desktop-app", "dsp", "spectrogram", "windows", "yt-dlp"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
