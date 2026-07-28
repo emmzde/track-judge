@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.pytest-tmp/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.build-cache/
+
+# Virtual environments and IDEs
+.venv/
+venv/
+.idea/
+.vscode/
+
+# TrackJudge output
+trackjudge-output/
+*.spectrogram.png
+trackjudge-report*.json
+*.part
+*.ytdl
+
+# Never commit browser cookies
+*cookies*.txt
+*cookies*.json
+
+# OS files
+.DS_Store
+Thumbs.db
