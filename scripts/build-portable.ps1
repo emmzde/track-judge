@@ -136,6 +136,7 @@ function Invoke-WindowsApp {
 }
 
 New-Item -ItemType Directory -Path $CacheRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $DistRoot -Force | Out-Null
 
 if (-not (Test-Path -LiteralPath $BuildPython)) {
     Write-Host "Creating an isolated build environment"
