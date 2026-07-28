@@ -1,13 +1,15 @@
 # TrackJudge
 
+[**English**](README.md) | [Русский](README.ru.md)
+
 [![Version](https://img.shields.io/badge/version-v1.1.0-22c55e)](https://github.com/emmzde/track-judge/releases/latest)
 [![Status](https://img.shields.io/badge/status-stable-22c55e)](https://github.com/emmzde/track-judge/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/emmzde/track-judge/actions/workflows/ci.yml/badge.svg)](https://github.com/emmzde/track-judge/actions/workflows/ci.yml)
 
-TrackJudge is a Windows desktop app and Python CLI that downloads up to five
-versions of the same track, evaluates their audio quality, and keeps the best
-candidate.
+TrackJudge is a Windows desktop application that downloads up to five versions
+of the same track, evaluates their audio quality, and keeps the best candidate.
+An optional command-line mode is included for automation and development.
 
 ![TrackJudge desktop interface](assets/trackjudge-gui.png)
 
@@ -107,7 +109,7 @@ ruff format --check .
 pytest
 ```
 
-## CLI
+## Optional command-line mode
 
 Compare online sources:
 
