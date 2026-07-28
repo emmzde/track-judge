@@ -25,7 +25,7 @@ from rich.text import Text
 from scipy.io import wavfile
 from scipy.signal import butter, sosfiltfilt, spectrogram
 
-from . import __version__
+from . import __version__, updater
 
 # Matplotlib опционален: если не установлен, скрипт работает без спектрограмм.
 try:
@@ -300,27 +300,56 @@ def _tool_filename(tool: str) -> str:
     return f"{tool}.exe" if sys.platform == "win32" else tool
 
 
-def find_external_tool(tool: str) -> str | None:
-    filename = _tool_filename(tool)
-    candidate_roots: list[Path] = []
-
-    configured_root = os.environ.get("TRACKJUDGE_TOOL_DIR")
-    if configured_root:
-        candidate_roots.append(Path(configured_root))
-
+def _packaged_tool_roots() -> list[Path]:
+    roots: list[Path] = []
     if getattr(sys, "frozen", False):
-        candidate_roots.append(Path(sys.executable).resolve().parent / "tools")
+        roots.append(Path(sys.executable).resolve().parent / "tools")
         bundle_root = getattr(sys, "_MEIPASS", None)
         if bundle_root:
-            candidate_roots.append(Path(bundle_root) / "tools")
+            roots.append(Path(bundle_root) / "tools")
     else:
-        candidate_roots.append(Path(__file__).resolve().parents[2] / "tools")
+        roots.append(Path(__file__).resolve().parents[2] / "tools")
+    return roots
 
-    for root in candidate_roots:
+
+def find_packaged_tool(tool: str) -> str | None:
+    filename = _tool_filename(tool)
+    for root in _packaged_tool_roots():
         candidate = root / filename
         if candidate.is_file():
             return str(candidate)
+    return None
+
+
+def find_external_tool(tool: str) -> str | None:
+    filename = _tool_filename(tool)
+    configured_root = os.environ.get("TRACKJUDGE_TOOL_DIR")
+    if configured_root:
+        configured = Path(configured_root) / filename
+        if configured.is_file():
+            return str(configured)
+
+    if tool == "yt-dlp" and updater.auto_update_supported():
+        managed = updater.managed_ytdlp_path()
+        if managed.is_file():
+            return str(managed)
+
+    packaged = find_packaged_tool(tool)
+    if packaged:
+        return packaged
     return shutil.which(tool)
+
+
+def prepare_ytdlp(force: bool = False) -> updater.UpdateResult | None:
+    if not updater.auto_update_supported():
+        return None
+    packaged = find_packaged_tool("yt-dlp")
+    if not packaged:
+        return None
+    result = updater.ensure_current_ytdlp(packaged, force=force)
+    if result.message:
+        log(result.message)
+    return result
 
 
 def external_tool(tool: str) -> str:
@@ -1546,6 +1575,12 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         return 2
 
     require_downloader = any(not os.path.isfile(source) for source in urls)
+    ytdlp_update: updater.UpdateResult | None = None
+    if require_downloader:
+        try:
+            ytdlp_update = prepare_ytdlp()
+        except Exception as exc:
+            log(f"Автообновление yt-dlp пропущено: {exc}")
     missing_tools = check_external_tools(require_downloader=require_downloader)
     if missing_tools:
         log("Не найдены внешние зависимости: " + ", ".join(missing_tools))
@@ -1575,14 +1610,19 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     with tempfile.TemporaryDirectory(prefix="audio_candidates_") as work_dir:
         # Скачивание последовательное (YouTube блокирует параллельные запросы).
         downloaded: list[tuple[str, str, dict[str, str]]] = []
+        failed_downloads: list[tuple[int, str, str]] = []
         preferred_browser: str | None = None
-        for idx, url in enumerate(urls, 1):
-            if idx > 1 and pause_seconds > 0:
-                log(f"Пауза {pause_seconds} с...")
-                time.sleep(pause_seconds)
-            candidate_dir = os.path.join(work_dir, f"candidate_{idx}")
-            # yt-dlp выполняет короткие сетевые повторы сам. Повтор всей команды
-            # не помогает при блокировке YouTube и только многократно растягивает запуск.
+
+        def attempt_download(
+            index: int,
+            url: str,
+            *,
+            reset_folder: bool = False,
+        ) -> tuple[str | None, dict[str, str]]:
+            nonlocal preferred_browser
+            candidate_dir = os.path.join(work_dir, f"candidate_{index}")
+            if reset_folder:
+                shutil.rmtree(candidate_dir, ignore_errors=True)
             orig_file, metadata = download_audio(
                 url,
                 candidate_dir,
@@ -1594,11 +1634,72 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
             used_browser = metadata.pop("_browser_cookies_used", None)
             if used_browser:
                 preferred_browser = used_browser
+            return orig_file, metadata
+
+        def retry_downloads(
+            pending: list[tuple[int, str, str]],
+        ) -> tuple[list[tuple[int, str, str]], int]:
+            remaining: list[tuple[int, str, str]] = []
+            success_count = 0
+            for index, url, _previous_reason in pending:
+                orig_file, metadata = attempt_download(index, url, reset_folder=True)
+                if orig_file and os.path.exists(orig_file):
+                    downloaded.append((url, orig_file, metadata))
+                    success_count += 1
+                else:
+                    reason = metadata.pop("_error", "скачивание не удалось")
+                    remaining.append((index, url, reason))
+            return remaining, success_count
+
+        for idx, url in enumerate(urls, 1):
+            if idx > 1 and pause_seconds > 0:
+                log(f"Пауза {pause_seconds} с...")
+                time.sleep(pause_seconds)
+            # yt-dlp выполняет короткие сетевые повторы сам. Повтор всей команды
+            # не помогает при блокировке YouTube и только многократно растягивает запуск.
+            orig_file, metadata = attempt_download(idx, url)
             if orig_file and os.path.exists(orig_file):
                 downloaded.append((url, orig_file, metadata))
             else:
                 reason = metadata.pop("_error", "скачивание не удалось")
-                failures.append({"url": url, "reason": reason})
+                failed_downloads.append((idx, url, reason))
+
+        current_successes = len(downloaded)
+        if current_successes and ytdlp_update is not None:
+            updater.mark_ytdlp_working()
+
+        if failed_downloads and ytdlp_update is not None and not ytdlp_update.updated:
+            try:
+                forced_update = prepare_ytdlp(force=True)
+            except Exception as exc:
+                log(f"Повторная проверка yt-dlp не удалась: {exc}")
+                forced_update = None
+            if forced_update is not None:
+                ytdlp_update = forced_update
+            if forced_update is not None and forced_update.updated:
+                log("Повторяем неудачные ссылки после обновления yt-dlp.")
+                current_successes = 0
+                failed_downloads, current_successes = retry_downloads(failed_downloads)
+                if current_successes:
+                    updater.mark_ytdlp_working()
+
+        if (
+            failed_downloads
+            and ytdlp_update is not None
+            and ytdlp_update.pending_validation
+            and current_successes == 0
+        ):
+            rollback = updater.rollback_ytdlp(
+                "Новая версия не смогла скачать ни один из проверенных источников."
+            )
+            if rollback is not None:
+                log(rollback.message)
+                log("Повторяем неудачные ссылки с предыдущей рабочей версией.")
+                failed_downloads, rollback_successes = retry_downloads(failed_downloads)
+                if rollback_successes:
+                    updater.mark_ytdlp_working()
+
+        failures.extend({"url": url, "reason": reason} for _index, url, reason in failed_downloads)
 
         # Анализ параллельный (CPU-intensive, не зависит от сети).
         workers = max(1, min(args.workers, len(downloaded)))

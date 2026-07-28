@@ -26,6 +26,10 @@ Portable Windows builds contain the official `yt-dlp.exe` release
 - License: https://github.com/yt-dlp/yt-dlp/blob/2026.07.04/LICENSE
 
 The executable includes its own compiled third-party license information.
+TrackJudge can replace its per-user runtime copy with a newer official
+`yt-dlp` nightly release. The bundled `2026.07.04` executable remains available
+as a fallback, and updated executables remain subject to the same project
+license.
 
 ## FFmpeg
 

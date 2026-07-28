@@ -9,7 +9,7 @@
 #endif
 
 #define MyAppName "TrackJudge"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "emmzde"
 #define MyAppURL "https://github.com/emmzde"
 #define MyAppExeName "TrackJudge.exe"
@@ -45,7 +45,7 @@ ChangesAssociations=no
 ChangesEnvironment=no
 UsePreviousAppDir=yes
 SetupLogging=yes
-VersionInfoVersion=1.0.0.0
+VersionInfoVersion=1.1.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} installer
 VersionInfoProductName={#MyAppName}
@@ -65,3 +65,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{localappdata}\TrackJudge\runtime"
+Type: dirifempty; Name: "{localappdata}\TrackJudge"

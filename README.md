@@ -1,6 +1,6 @@
 # TrackJudge
 
-[![Version](https://img.shields.io/badge/version-v1.0.0-22c55e)](https://github.com/emmzde/track-judge/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.1.0-22c55e)](https://github.com/emmzde/track-judge/releases/latest)
 [![Status](https://img.shields.io/badge/status-stable-22c55e)](https://github.com/emmzde/track-judge/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/emmzde/track-judge/actions/workflows/ci.yml/badge.svg)](https://github.com/emmzde/track-judge/actions/workflows/ci.yml)
@@ -21,6 +21,7 @@ candidate.
 - Saves the winner without re-encoding whenever possible.
 - Generates an optional JSON report and spectrograms for every candidate.
 - Includes Russian, English, and German interface languages.
+- Keeps `yt-dlp` current automatically and rolls back a broken update.
 
 > TrackJudge is a comparison heuristic, not forensic proof of audio provenance.
 > It works best with different sources of the same recording and master.
@@ -35,12 +36,19 @@ Run the installer once. It installs TrackJudge for the current Windows user and
 creates shortcuts on the desktop and in the Start menu. Python, FFmpeg,
 FFprobe, `yt-dlp`, and all required libraries are included.
 
+Before an online comparison, TrackJudge checks for a current `yt-dlp` build.
+Updates are stored under the current Windows user's local app data, verified by
+the official updater, and never overwrite the bundled fallback copy. If a new
+build cannot download any source, TrackJudge restores the previous working
+version and retries.
+
 ### Portable version
 
 [Download the portable ZIP](https://github.com/emmzde/track-judge/releases/latest/download/TrackJudge-Windows-x64.zip)
 
 Extract the archive and launch `TrackJudge.exe`. The portable build does not
-create shortcuts or modify `PATH`.
+create shortcuts or modify `PATH`. Its automatically updated `yt-dlp` runtime
+copy is stored in the current Windows user's local app data.
 
 Unsigned builds can trigger a Windows SmartScreen warning. SHA-256 checksum
 files are attached to every release.
@@ -153,6 +161,8 @@ performs GUI and audio smoke tests, and produces:
 - matching SHA-256 files
 
 Pushing a `v*` Git tag runs the same release pipeline through GitHub Actions.
+The repository also runs a weekly YouTube extraction smoke test and receives
+weekly dependency update proposals through Dependabot.
 
 ## Legal and security notes
 
@@ -164,6 +174,10 @@ TrackJudge. Common cookie filenames and generated media are excluded by
 Third-party components and their licenses are documented in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Portable builds include the
 notices shipped with the bundled FFmpeg distribution.
+
+Automatic `yt-dlp` updates use the official nightly channel. Set
+`TRACKJUDGE_DISABLE_YTDLP_UPDATE=1` before launching the app to disable them,
+or set `TRACKJUDGE_YTDLP_CHANNEL=stable` to stay on stable releases.
 
 ## License
 
