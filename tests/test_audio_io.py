@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 from scipy.io import wavfile
 
+from trackjudge import app, updater
 from trackjudge.app import (
     ANALYSIS_SAMPLE_RATE,
     _tool_filename,
@@ -55,6 +56,21 @@ def test_external_tool_can_be_loaded_from_portable_directory(
     monkeypatch.setenv("TRACKJUDGE_TOOL_DIR", str(tmp_path))
 
     assert find_external_tool("ffmpeg") == str(tool)
+
+
+def test_managed_ytdlp_takes_priority_over_bundled_copy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    managed_root = tmp_path / "runtime"
+    managed = managed_root / _tool_filename("yt-dlp")
+    managed.parent.mkdir(parents=True)
+    managed.write_bytes(b"managed yt-dlp")
+    monkeypatch.setattr(updater, "auto_update_supported", lambda: True)
+    monkeypatch.setattr(updater, "managed_ytdlp_path", lambda: managed)
+    monkeypatch.setattr(app, "find_packaged_tool", lambda _tool: "/bundle/yt-dlp.exe")
+
+    assert find_external_tool("yt-dlp") == str(managed)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific process flags")

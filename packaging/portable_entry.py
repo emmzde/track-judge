@@ -4,10 +4,20 @@ import multiprocessing
 import os
 import sys
 
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+
+def _redirect_unstable_standard_streams() -> None:
+    arguments = sys.argv[1:]
+    detached_cli = bool(
+        arguments
+        and (arguments[0] == "--headless" or arguments[0] in {"--help", "--version", "-h"})
+    )
+    if detached_cli or sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+    if detached_cli or sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+
+
+_redirect_unstable_standard_streams()
 
 
 def run() -> int:
