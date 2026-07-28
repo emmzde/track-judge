@@ -66,6 +66,12 @@ def previous_ytdlp_path() -> Path:
     )
 
 
+def candidate_ytdlp_path() -> Path:
+    return runtime_root() / (
+        "yt-dlp.candidate.exe" if sys.platform == "win32" else "yt-dlp.candidate"
+    )
+
+
 def _state_path() -> Path:
     return runtime_root() / "yt-dlp-state.json"
 
@@ -342,6 +348,9 @@ def ensure_current_ytdlp(
             )
 
         updated = _version_key(after_version) > _version_key(before_version)
+        if updated:
+            with contextlib.suppress(OSError):
+                candidate_ytdlp_path().unlink()
         state = _new_state(
             state,
             active,
@@ -386,6 +395,8 @@ def mark_ytdlp_working() -> None:
             last_working=time.time(),
         )
         _write_state(state)
+        with contextlib.suppress(OSError):
+            candidate_ytdlp_path().unlink()
 
 
 def rollback_ytdlp(reason: str) -> UpdateResult | None:
@@ -400,6 +411,7 @@ def rollback_ytdlp(reason: str) -> UpdateResult | None:
         previous_version = _binary_version(previous)
         if not previous_version:
             return None
+        _atomic_copy(active, candidate_ytdlp_path())
         _atomic_copy(previous, active)
         restored_version = _binary_version(active)
         if not restored_version:
@@ -421,4 +433,39 @@ def rollback_ytdlp(reason: str) -> UpdateResult | None:
             checked=True,
             repaired=True,
             message=f"yt-dlp возвращён к рабочей версии {restored_version}.",
+        )
+
+
+def restore_ytdlp_candidate(reason: str) -> UpdateResult | None:
+    with _PROCESS_LOCK, _exclusive_update_lock() as acquired:
+        if not acquired:
+            return None
+        candidate = candidate_ytdlp_path()
+        candidate_version = _binary_version(candidate)
+        if not candidate_version:
+            return None
+        active = managed_ytdlp_path()
+        _atomic_copy(candidate, active)
+        restored_version = _binary_version(active)
+        if not restored_version:
+            return None
+        now = time.time()
+        state = _new_state(
+            _read_state(),
+            active,
+            restored_version,
+            pending_validation=True,
+            last_error=reason[-500:],
+            next_check=now + FAILED_CHECK_INTERVAL_SECONDS,
+        )
+        _write_state(state)
+        with contextlib.suppress(OSError):
+            candidate.unlink()
+        return UpdateResult(
+            str(active),
+            restored_version,
+            checked=True,
+            repaired=True,
+            pending_validation=True,
+            message=f"yt-dlp {restored_version} восстановлен: старая версия тоже не помогла.",
         )

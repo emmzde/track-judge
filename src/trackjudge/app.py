@@ -1698,6 +1698,12 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
                 failed_downloads, rollback_successes = retry_downloads(failed_downloads)
                 if rollback_successes:
                     updater.mark_ytdlp_working()
+                else:
+                    restored_candidate = updater.restore_ytdlp_candidate(
+                        "Предыдущая версия не смогла скачать эти же источники."
+                    )
+                    if restored_candidate is not None:
+                        log(restored_candidate.message)
 
         failures.extend({"url": url, "reason": reason} for _index, url, reason in failed_downloads)
 

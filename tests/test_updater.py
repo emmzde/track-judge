@@ -157,7 +157,37 @@ def test_pending_update_can_be_rolled_back_after_download_failure(
     assert result is not None
     assert result.version == "2026.07.04"
     assert updater.managed_ytdlp_path().read_bytes() == b"stable"
+    assert updater.candidate_ytdlp_path().read_bytes() == b"nightly"
     assert state["pending_validation"] is False
+
+
+def test_new_candidate_is_restored_when_old_version_fails_too(
+    updater_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = tmp_path / "yt-dlp.exe"
+    seed.write_bytes(b"stable")
+
+    def fake_run(
+        path: Path, arguments: list[str], timeout: int
+    ) -> subprocess.CompletedProcess[str]:
+        path.write_bytes(b"nightly")
+        return subprocess.CompletedProcess(arguments, 0, "Updated\n", "")
+
+    monkeypatch.setattr(updater, "_run_binary", fake_run)
+    updater.ensure_current_ytdlp(seed, force=True)
+    updater.rollback_ytdlp("new version failed")
+
+    result = updater.restore_ytdlp_candidate("old version failed too")
+    state = json.loads((updater_root / "yt-dlp-state.json").read_text(encoding="utf-8"))
+
+    assert result is not None
+    assert result.version == "2026.07.28.232900"
+    assert result.pending_validation is True
+    assert updater.managed_ytdlp_path().read_bytes() == b"nightly"
+    assert updater.candidate_ytdlp_path().exists() is False
+    assert state["pending_validation"] is True
 
 
 def test_mark_working_accepts_pending_update(
@@ -182,3 +212,4 @@ def test_mark_working_accepts_pending_update(
 
     assert state["pending_validation"] is False
     assert state["last_working"] > 0
+    assert updater.candidate_ytdlp_path().exists() is False
