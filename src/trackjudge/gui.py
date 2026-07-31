@@ -1543,9 +1543,7 @@ class TrackJudgeWindow:
                 FONTS["app_title"]["size"],
                 FONTS["app_title"]["weight"],
             ),
-        ).grid(
-            row=0, column=0, sticky="w"
-        )
+        ).grid(row=0, column=0, sticky="w")
         self.ttk.Label(
             title_block,
             text=self.tr("subtitle"),
