@@ -54,23 +54,70 @@ from .app import (  # noqa: E402
 )
 
 APP_TITLE = "TrackJudge"
-BACKGROUND = "#09111d"
-CARD = "#121e2d"
-CARD_ALT = "#0e1826"
-INPUT = "#0a1421"
-TEXT = "#f1f7fb"
-MUTED = "#9aafc1"
-ACCENT = "#43cbe9"
-ACCENT_ACTIVE = "#70dcef"
-GREEN = "#4bd88c"
-GREEN_ACTIVE = "#75e4aa"
-RED = "#ff7480"
-BORDER = "#294058"
-TITLE_BAR = "#070d16"
+
+# Presentation tokens. Keeping the palette and type scale in one place makes the
+# desktop theme predictable and prevents individual widgets from inventing their
+# own decorative colors.
+COLORS = {
+    "window": "#161718",
+    "title_bar": "#101112",
+    "surface": "#1D1F20",
+    "surface_raised": "#222425",
+    "surface_subtle": "#191B1C",
+    "field": "#111314",
+    "field_disabled": "#181A1B",
+    "border": "#353839",
+    "border_strong": "#55595A",
+    "text": "#F0F0EC",
+    "text_secondary": "#B4B6B2",
+    "text_muted": "#7D817E",
+    "text_disabled": "#5F6360",
+    "accent": "#D49A45",
+    "accent_hover": "#E0A956",
+    "accent_pressed": "#B77D30",
+    "accent_text": "#1B160F",
+    "success": "#66A878",
+    "success_surface": "#1C2A21",
+    "warning": "#C9A15A",
+    "error": "#D26F70",
+    "error_surface": "#2A1D1E",
+    "selection": "#59472D",
+    "overlay": "#0D0E0F",
+}
+
+FONTS = {
+    "app_title": {"size": 25, "weight": "bold"},
+    "screen_title": {"size": 20, "weight": "bold"},
+    "section_title": {"size": 12, "weight": "bold"},
+    "result_title": {"size": 14, "weight": "bold"},
+    "body": {"size": 10, "weight": "normal"},
+    "body_large": {"size": 11, "weight": "normal"},
+    "control": {"size": 10, "weight": "normal"},
+    "control_strong": {"size": 10, "weight": "bold"},
+    "caption": {"size": 9, "weight": "normal"},
+    "technical": {"size": 9, "weight": "normal"},
+}
+
+# Compact aliases keep the view code readable. Every value still comes from the
+# explicit theme above.
+BACKGROUND = COLORS["window"]
+CARD = COLORS["surface"]
+CARD_ALT = COLORS["surface_raised"]
+INPUT = COLORS["field"]
+TEXT = COLORS["text"]
+MUTED = COLORS["text_secondary"]
+ACCENT = COLORS["accent"]
+ACCENT_ACTIVE = COLORS["accent_hover"]
+GREEN = COLORS["success"]
+GREEN_ACTIVE = COLORS["success"]
+RED = COLORS["error"]
+BORDER = COLORS["border"]
+TITLE_BAR = COLORS["title_bar"]
 GITHUB_URL = "https://github.com/emmzde"
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ru": {
+        "workspace_title": "Сравнение аудиоисточников",
         "subtitle": "Сравните варианты одного трека и сохраните самый качественный.",
         "sources_title": "1. Вставьте ссылки на варианты трека",
         "source_placeholder": (
@@ -147,6 +194,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "quality_low": "низкое качество",
     },
     "en": {
+        "workspace_title": "Audio source comparison",
         "subtitle": "Compare versions of one track and keep the highest-quality source.",
         "sources_title": "1. Paste links to track versions",
         "source_placeholder": (
@@ -223,6 +271,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "quality_low": "low quality",
     },
     "de": {
+        "workspace_title": "Audioquellen vergleichen",
         "subtitle": "Vergleiche Versionen eines Tracks und behalte die hochwertigste Quelle.",
         "sources_title": "1. Links zu den Track-Versionen einfügen",
         "source_placeholder": (
@@ -509,7 +558,7 @@ class QueueWriter:
 
 
 class StyledCheck:
-    """A DPI-friendly checkbox built from regular Tk widgets."""
+    """A DPI-aware, theme-native checkbox drawn with simple outline geometry."""
 
     def __init__(
         self,
@@ -519,25 +568,35 @@ class StyledCheck:
         text: str,
         variable: Any,
         font: tuple[Any, ...],
+        background: str = CARD,
     ) -> None:
         self.tk = tk
         self.variable = variable
         self.state = "normal"
-        self.frame = tk.Frame(parent, background=CARD, cursor="hand2", takefocus=1)
-        self.box = tk.Label(
+        self.background = background
+        self.hovered = False
+        scale = float(parent.tk.call("tk", "scaling")) / (96.0 / 72.0)
+        self.box_size = max(16, round(18 * scale))
+        self.frame = tk.Frame(
+            parent,
+            background=background,
+            cursor="hand2",
+            takefocus=1,
+        )
+        self.box = tk.Canvas(
             self.frame,
-            width=2,
-            height=1,
+            width=self.box_size,
+            height=self.box_size,
+            background=background,
+            highlightthickness=0,
             borderwidth=0,
-            relief="flat",
-            font=(font[0], 11, "bold"),
             cursor="hand2",
         )
         self.box.pack(side="left", padx=(0, 10))
         self.label = tk.Label(
             self.frame,
             text=text,
-            background=CARD,
+            background=background,
             foreground=TEXT,
             font=font,
             anchor="w",
@@ -546,8 +605,12 @@ class StyledCheck:
         self.label.pack(side="left", fill="x", expand=True)
         for widget in (self.frame, self.box, self.label):
             widget.bind("<Button-1>", self._toggle)
+            widget.bind("<Enter>", self._on_enter)
+            widget.bind("<Leave>", self._on_leave)
         self.frame.bind("<space>", self._toggle)
         self.frame.bind("<Return>", self._toggle)
+        self.frame.bind("<FocusIn>", lambda _event: self._render())
+        self.frame.bind("<FocusOut>", lambda _event: self._render())
         self._trace_id = self.variable.trace_add("write", lambda *_args: self._render())
         self._render()
 
@@ -556,26 +619,51 @@ class StyledCheck:
             self.variable.set(not bool(self.variable.get()))
         return "break"
 
+    def _on_enter(self, _event: Any = None) -> None:
+        self.hovered = True
+        self._render()
+
+    def _on_leave(self, _event: Any = None) -> None:
+        self.hovered = False
+        self._render()
+
     def _render(self) -> None:
         disabled = self.state == "disabled"
         checked = bool(self.variable.get())
+        focused = self.frame.focus_get() == self.frame
+        fill = COLORS["field_disabled"] if disabled else INPUT
+        border = COLORS["text_disabled"] if disabled else BORDER
+        if self.hovered and not disabled:
+            border = COLORS["border_strong"]
+        if focused and not disabled:
+            border = COLORS["text_secondary"]
+        self.box.configure(background=self.background)
+        self.box.delete("all")
+        inset = max(1, round(self.box_size * 0.08))
+        self.box.create_rectangle(
+            inset,
+            inset,
+            self.box_size - inset,
+            self.box_size - inset,
+            fill=fill,
+            outline=border,
+            width=max(1, round(self.box_size * 0.07)),
+        )
         if checked:
-            self.box.configure(
-                text="✓",
-                background="#2eabc5" if disabled else ACCENT,
-                foreground="#17323b" if disabled else "#04131a",
-                highlightbackground="#2eabc5" if disabled else ACCENT,
-                highlightthickness=1,
+            check_color = COLORS["text_disabled"] if disabled else TEXT
+            self.box.create_line(
+                self.box_size * 0.25,
+                self.box_size * 0.52,
+                self.box_size * 0.43,
+                self.box_size * 0.70,
+                self.box_size * 0.77,
+                self.box_size * 0.31,
+                fill=check_color,
+                width=max(2, round(self.box_size * 0.11)),
+                capstyle="round",
+                joinstyle="round",
             )
-        else:
-            self.box.configure(
-                text="",
-                background="#101c28" if disabled else INPUT,
-                foreground=TEXT,
-                highlightbackground="#26394b" if disabled else "#45627a",
-                highlightthickness=1,
-            )
-        color = "#647689" if disabled else TEXT
+        color = COLORS["text_disabled"] if disabled else TEXT
         cursor = "arrow" if disabled else "hand2"
         self.frame.configure(cursor=cursor)
         self.box.configure(cursor=cursor)
@@ -589,6 +677,10 @@ class StyledCheck:
             self.state = str(kwargs.pop("state"))
         if "text" in kwargs:
             self.label.configure(text=kwargs.pop("text"))
+        if "background" in kwargs:
+            self.background = str(kwargs.pop("background"))
+            self.frame.configure(background=self.background)
+            self.label.configure(background=self.background)
         if kwargs:
             self.frame.configure(**kwargs)
         self._render()
@@ -638,7 +730,7 @@ class LoadingSpinner:
         if not self.running:
             return
         self.canvas.delete("all")
-        self.canvas.create_oval(5, 5, 23, 23, outline="#1d3b50", width=3)
+        self.canvas.create_oval(5, 5, 23, 23, outline=COLORS["border"], width=2)
         self.canvas.create_arc(
             5,
             5,
@@ -648,7 +740,7 @@ class LoadingSpinner:
             extent=105,
             style="arc",
             outline=ACCENT,
-            width=3,
+            width=2,
         )
         self.canvas.create_arc(
             5,
@@ -658,8 +750,8 @@ class LoadingSpinner:
             start=self.angle + 180,
             extent=35,
             style="arc",
-            outline=ACCENT_ACTIVE,
-            width=3,
+            outline=COLORS["text_secondary"],
+            width=2,
         )
         self.angle = (self.angle + 12) % 360
         self.after_id = self.canvas.after(32, self._tick)
@@ -694,13 +786,13 @@ class TrackJudgeWindow:
         self.report_temp_folder: str | None = None
         self.language_popup: Any | None = None
         self._is_maximized = False
-        self._normal_geometry = "980x940"
+        self._normal_geometry = "1080x760"
         self._drag_origin: tuple[int, int, int, int] | None = None
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
-        self.root.geometry("980x940")
-        self.root.minsize(820, 780)
+        self.root.geometry("1080x760")
+        self.root.minsize(860, 680)
         self.root.configure(background=BACKGROUND)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._configure_dpi_and_fonts()
@@ -783,52 +875,108 @@ class TrackJudgeWindow:
         style.configure("App.TFrame", background=BACKGROUND)
         style.configure("Card.TFrame", background=CARD)
         style.configure("CardAlt.TFrame", background=CARD_ALT)
+        style.configure("Settings.TFrame", background=COLORS["surface_subtle"])
+        style.configure("Result.TFrame", background=CARD_ALT)
         style.configure(
             "Title.TLabel",
             background=BACKGROUND,
             foreground=TEXT,
-            font=(self.heading_family, 25, "bold"),
+            font=(
+                self.heading_family,
+                FONTS["app_title"]["size"],
+                FONTS["app_title"]["weight"],
+            ),
         )
         style.configure(
             "Subtitle.TLabel",
             background=BACKGROUND,
             foreground=MUTED,
-            font=(self.font_family, 11),
+            font=(self.font_family, FONTS["body_large"]["size"]),
         )
         style.configure(
             "Section.TLabel",
-            background=CARD,
+            background=BACKGROUND,
             foreground=TEXT,
-            font=(self.heading_family, 12, "bold"),
+            font=(
+                self.heading_family,
+                FONTS["section_title"]["size"],
+                FONTS["section_title"]["weight"],
+            ),
+        )
+        style.configure(
+            "SettingsSection.TLabel",
+            background=COLORS["surface_subtle"],
+            foreground=TEXT,
+            font=(
+                self.heading_family,
+                FONTS["section_title"]["size"],
+                FONTS["section_title"]["weight"],
+            ),
         )
         style.configure("Card.TLabel", background=CARD, foreground=TEXT)
-        style.configure("Muted.TLabel", background=CARD, foreground=MUTED)
-        style.configure("Error.TLabel", background=CARD, foreground=RED)
-        style.configure("Status.TLabel", background=BACKGROUND, foreground=MUTED)
+        style.configure("Muted.TLabel", background=BACKGROUND, foreground=COLORS["text_muted"])
+        style.configure("Error.TLabel", background=BACKGROUND, foreground=RED)
+        style.configure(
+            "Settings.TLabel",
+            background=COLORS["surface_subtle"],
+            foreground=MUTED,
+        )
+        style.configure(
+            "Status.TLabel",
+            background=BACKGROUND,
+            foreground=COLORS["text_muted"],
+            font=(self.font_family, FONTS["caption"]["size"]),
+        )
+        style.configure(
+            "StatusReady.TLabel",
+            background=BACKGROUND,
+            foreground=COLORS["text_secondary"],
+            font=(self.font_family, FONTS["caption"]["size"]),
+        )
+        style.configure(
+            "StatusError.TLabel",
+            background=BACKGROUND,
+            foreground=RED,
+            font=(self.font_family, FONTS["caption"]["size"]),
+        )
         style.configure(
             "Counter.TLabel",
-            background="#1c3449",
-            foreground=ACCENT_ACTIVE,
-            padding=(9, 4),
-            font=(self.heading_family, 10, "bold"),
+            background=BACKGROUND,
+            foreground=COLORS["text_muted"],
+            padding=(6, 2),
+            font=(self.mono_family, FONTS["technical"]["size"], "bold"),
         )
         style.configure(
             "ResultTitle.TLabel",
-            background=CARD_ALT,
+            background=BACKGROUND,
             foreground=TEXT,
-            font=(self.heading_family, 13, "bold"),
+            font=(
+                self.heading_family,
+                FONTS["result_title"]["size"],
+                FONTS["result_title"]["weight"],
+            ),
         )
         style.configure(
             "ResultError.TLabel",
-            background=CARD_ALT,
+            background=BACKGROUND,
             foreground=RED,
-            font=(self.heading_family, 13, "bold"),
+            font=(
+                self.heading_family,
+                FONTS["result_title"]["size"],
+                FONTS["result_title"]["weight"],
+            ),
         )
         style.configure(
             "Result.TLabel",
-            background=CARD_ALT,
+            background=BACKGROUND,
             foreground=MUTED,
-            font=(self.font_family, 11),
+            font=(self.font_family, FONTS["body"]["size"]),
+        )
+        style.configure(
+            "ResultPath.TLabel",
+            background=BACKGROUND,
+            foreground=COLORS["text_muted"],
+            font=(self.mono_family, FONTS["technical"]["size"]),
         )
         style.configure(
             "App.TEntry",
@@ -838,55 +986,164 @@ class TrackJudgeWindow:
             bordercolor=BORDER,
             lightcolor=BORDER,
             darkcolor=BORDER,
-            padding=(10, 8),
+            padding=(10, 9),
+            font=(self.mono_family, FONTS["technical"]["size"]),
         )
         style.map(
             "App.TEntry",
-            bordercolor=[("focus", ACCENT)],
-            lightcolor=[("focus", ACCENT)],
-            darkcolor=[("focus", ACCENT)],
+            fieldbackground=[("disabled", COLORS["field_disabled"]), ("readonly", INPUT)],
+            foreground=[("disabled", COLORS["text_disabled"]), ("readonly", TEXT)],
+            bordercolor=[("focus", COLORS["border_strong"])],
+            lightcolor=[("focus", COLORS["border_strong"])],
+            darkcolor=[("focus", COLORS["border_strong"])],
         )
         style.configure(
             "Accent.TButton",
             background=ACCENT,
-            foreground="#04131a",
-            borderwidth=0,
-            padding=(20, 10),
-            font=(self.heading_family, 11, "bold"),
+            foreground=COLORS["accent_text"],
+            bordercolor=ACCENT,
+            lightcolor=ACCENT,
+            darkcolor=ACCENT,
+            borderwidth=1,
+            padding=(22, 12),
+            font=(
+                self.heading_family,
+                FONTS["control_strong"]["size"],
+                FONTS["control_strong"]["weight"],
+            ),
         )
         style.map(
             "Accent.TButton",
-            background=[("active", ACCENT_ACTIVE), ("disabled", "#24414c")],
-            foreground=[("disabled", "#718995")],
+            background=[
+                ("pressed", COLORS["accent_pressed"]),
+                ("active", ACCENT_ACTIVE),
+                ("disabled", COLORS["surface"]),
+            ],
+            bordercolor=[("disabled", BORDER)],
+            lightcolor=[("disabled", BORDER)],
+            darkcolor=[("disabled", BORDER)],
+            foreground=[("disabled", COLORS["text_disabled"])],
         )
         style.configure(
             "Secondary.TButton",
-            background="#1b2d40",
-            foreground=TEXT,
+            background=BACKGROUND,
+            foreground=MUTED,
             borderwidth=0,
-            padding=(13, 8),
-            font=(self.font_family, 10),
+            padding=(10, 7),
+            font=(self.font_family, FONTS["control"]["size"]),
         )
         style.map(
             "Secondary.TButton",
-            background=[("active", "#264059"), ("disabled", "#121f2c")],
-            foreground=[("disabled", "#607486")],
+            background=[("active", COLORS["surface"]), ("disabled", BACKGROUND)],
+            foreground=[("active", TEXT), ("disabled", COLORS["text_disabled"])],
         )
         style.configure(
             "SecondaryStrong.TButton",
-            background="#24445f",
+            background=COLORS["surface"],
             foreground=TEXT,
-            bordercolor="#3b6684",
-            lightcolor="#3b6684",
-            darkcolor="#3b6684",
+            bordercolor=COLORS["border_strong"],
+            lightcolor=COLORS["border_strong"],
+            darkcolor=COLORS["border_strong"],
             borderwidth=1,
-            padding=(15, 9),
-            font=(self.heading_family, 10, "bold"),
+            padding=(14, 9),
+            font=(
+                self.heading_family,
+                FONTS["control_strong"]["size"],
+                FONTS["control_strong"]["weight"],
+            ),
         )
         style.map(
             "SecondaryStrong.TButton",
-            background=[("active", "#315d7d"), ("disabled", "#142434")],
-            foreground=[("disabled", "#607486")],
+            background=[("active", COLORS["surface_raised"]), ("disabled", BACKGROUND)],
+            bordercolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            lightcolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            darkcolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            foreground=[("disabled", COLORS["text_disabled"])],
+        )
+        style.configure(
+            "ResultText.TButton",
+            background=BACKGROUND,
+            foreground=MUTED,
+            borderwidth=0,
+            padding=(8, 7),
+            font=(self.font_family, FONTS["control"]["size"]),
+        )
+        style.map(
+            "ResultText.TButton",
+            background=[("active", COLORS["surface"]), ("disabled", BACKGROUND)],
+            foreground=[("active", TEXT), ("disabled", COLORS["text_disabled"])],
+        )
+        style.configure(
+            "CardText.TButton",
+            background=CARD,
+            foreground=MUTED,
+            borderwidth=0,
+            padding=(9, 7),
+            font=(self.font_family, FONTS["control"]["size"]),
+        )
+        style.map(
+            "CardText.TButton",
+            background=[("active", CARD_ALT), ("disabled", CARD)],
+            foreground=[("active", TEXT), ("disabled", COLORS["text_disabled"])],
+        )
+        style.configure(
+            "ResultStrong.TButton",
+            background=BACKGROUND,
+            foreground=TEXT,
+            bordercolor=COLORS["border_strong"],
+            lightcolor=COLORS["border_strong"],
+            darkcolor=COLORS["border_strong"],
+            borderwidth=1,
+            padding=(14, 9),
+            font=(
+                self.heading_family,
+                FONTS["control_strong"]["size"],
+                FONTS["control_strong"]["weight"],
+            ),
+        )
+        style.map(
+            "ResultStrong.TButton",
+            background=[("active", COLORS["surface"]), ("disabled", BACKGROUND)],
+            bordercolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            lightcolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            darkcolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            foreground=[("disabled", COLORS["text_disabled"])],
+        )
+        style.configure(
+            "ModalText.TButton",
+            background=CARD_ALT,
+            foreground=MUTED,
+            borderwidth=0,
+            padding=(8, 7),
+            font=(self.font_family, FONTS["control"]["size"]),
+        )
+        style.map(
+            "ModalText.TButton",
+            background=[("active", CARD), ("disabled", CARD_ALT)],
+            foreground=[("active", TEXT), ("disabled", COLORS["text_disabled"])],
+        )
+        style.configure(
+            "ModalStrong.TButton",
+            background=CARD_ALT,
+            foreground=TEXT,
+            bordercolor=COLORS["border_strong"],
+            lightcolor=COLORS["border_strong"],
+            darkcolor=COLORS["border_strong"],
+            borderwidth=1,
+            padding=(14, 9),
+            font=(
+                self.heading_family,
+                FONTS["control_strong"]["size"],
+                FONTS["control_strong"]["weight"],
+            ),
+        )
+        style.map(
+            "ModalStrong.TButton",
+            background=[("active", CARD), ("disabled", CARD_ALT)],
+            bordercolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            lightcolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            darkcolor=[("active", COLORS["text_muted"]), ("disabled", BORDER)],
+            foreground=[("disabled", COLORS["text_disabled"])],
         )
         style.configure(
             "TCheckbutton",
@@ -897,26 +1154,61 @@ class TrackJudgeWindow:
         style.map(
             "TCheckbutton",
             background=[("active", CARD)],
-            foreground=[("disabled", "#647689")],
-            indicatorcolor=[("selected", ACCENT), ("!selected", INPUT)],
+            foreground=[("disabled", COLORS["text_disabled"])],
+            indicatorcolor=[("selected", TEXT), ("!selected", INPUT)],
         )
         style.configure(
             "Horizontal.TProgressbar",
             background=ACCENT,
-            troughcolor="#182a3c",
+            troughcolor=COLORS["surface"],
             borderwidth=0,
             lightcolor=ACCENT,
             darkcolor=ACCENT,
         )
         style.configure(
             "Analysis.Vertical.TScrollbar",
-            background="#24445f",
+            background=COLORS["border_strong"],
             troughcolor=BACKGROUND,
             bordercolor=BACKGROUND,
             arrowcolor=MUTED,
-            lightcolor="#315d7d",
-            darkcolor="#1b3348",
+            lightcolor=COLORS["border_strong"],
+            darkcolor=BORDER,
         )
+
+    def _build_waveform_mark(
+        self,
+        parent: Any,
+        *,
+        background: str,
+        width: int,
+        height: int,
+        color: str = TEXT,
+    ) -> Any:
+        canvas = self.tk.Canvas(
+            parent,
+            width=width,
+            height=height,
+            background=background,
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        levels = (0.18, 0.38, 0.68, 0.42, 0.86, 0.52, 0.72, 0.34, 0.16)
+        step = width / (len(levels) + 1)
+        center = height / 2
+        line_width = max(1, round(width / 28))
+        for index, level in enumerate(levels, 1):
+            x = index * step
+            half = max(2, height * level / 2)
+            canvas.create_line(
+                x,
+                center - half,
+                x,
+                center + half,
+                fill=color,
+                width=line_width,
+                capstyle="round",
+            )
+        return canvas
 
     def _build_title_bar(self) -> None:
         bar = self.tk.Frame(self.root, background=TITLE_BAR, height=42)
@@ -925,14 +1217,14 @@ class TrackJudgeWindow:
         bar.columnconfigure(1, weight=1)
         self.title_bar = bar
 
-        mark = self.tk.Label(
+        mark = self._build_waveform_mark(
             bar,
-            text="♫",
             background=TITLE_BAR,
-            foreground=ACCENT,
-            font=(self.heading_family, 15, "bold"),
+            width=24,
+            height=22,
+            color=COLORS["text_secondary"],
         )
-        mark.grid(row=0, column=0, padx=(14, 8), sticky="w")
+        mark.grid(row=0, column=0, padx=(15, 9), sticky="w")
         title = self.tk.Label(
             bar,
             text=APP_TITLE,
@@ -947,28 +1239,28 @@ class TrackJudgeWindow:
             "RU  ▾",
             self._toggle_language_popup,
             width=8,
-            hover="#17283a",
+            hover=COLORS["surface"],
         )
         self.language_button.grid(row=0, column=2, sticky="e", padx=(0, 5))
         self._minimize_button = self._window_control_button(
             bar,
             "minimize",
             self._minimize_window,
-            hover="#17283a",
+            hover=COLORS["surface"],
         )
         self._minimize_button.grid(row=0, column=3, sticky="e")
         self._maximize_button = self._window_control_button(
             bar,
             "maximize",
             self._toggle_maximize,
-            hover="#17283a",
+            hover=COLORS["surface"],
         )
         self._maximize_button.grid(row=0, column=4, sticky="e")
         self._close_button = self._window_control_button(
             bar,
             "close",
             self._on_close,
-            hover="#c42b3a",
+            hover=COLORS["error"],
         )
         self._close_button.grid(row=0, column=5, sticky="e")
 
@@ -1039,7 +1331,7 @@ class TrackJudgeWindow:
     def _draw_window_control(self, button: Any, kind: str) -> None:
         button._trackjudge_icon = kind
         button.delete("window-icon")
-        color = "#e6eef5"
+        color = COLORS["text"]
         if kind == "minimize":
             button.create_line(
                 18,
@@ -1170,7 +1462,7 @@ class TrackJudgeWindow:
                 popup,
                 text=("✓  " if code == self.language else "     ") + label,
                 background=CARD,
-                foreground=ACCENT_ACTIVE if code == self.language else TEXT,
+                foreground=TEXT if code == self.language else MUTED,
                 anchor="w",
                 padx=13,
                 pady=9,
@@ -1179,7 +1471,10 @@ class TrackJudgeWindow:
             )
             button.grid(row=row, column=0, sticky="ew")
             button.bind("<Button-1>", lambda _event, value=code: self._change_language(value))
-            button.bind("<Enter>", lambda _event, item=button: item.configure(background="#1b2d40"))
+            button.bind(
+                "<Enter>",
+                lambda _event, item=button: item.configure(background=COLORS["surface_raised"]),
+            )
             button.bind("<Leave>", lambda _event, item=button: item.configure(background=CARD))
         popup.columnconfigure(0, weight=1)
         popup.lift()
@@ -1227,32 +1522,53 @@ class TrackJudgeWindow:
         self._sync_button_states()
 
     def _build_layout(self) -> None:
-        outer = self.ttk.Frame(self.content_host, style="App.TFrame", padding=(26, 18, 26, 12))
+        outer = self.ttk.Frame(self.content_host, style="App.TFrame", padding=(28, 22, 28, 14))
         outer.grid(row=0, column=0, sticky="nsew")
         self._main_outer = outer
         outer.columnconfigure(0, weight=1)
-        outer.rowconfigure(4, weight=1)
+        outer.rowconfigure(1, weight=1)
 
         header = self.ttk.Frame(outer, style="App.TFrame")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
-        header.columnconfigure(1, weight=1)
-        self._build_logo(header)
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 20))
+        header.columnconfigure(0, weight=1)
         title_block = self.ttk.Frame(header, style="App.TFrame")
-        title_block.grid(row=0, column=1, sticky="w", padx=(15, 0))
-        self.ttk.Label(title_block, text=APP_TITLE, style="Title.TLabel").grid(
+        title_block.grid(row=0, column=0, sticky="w")
+        self.tk.Label(
+            title_block,
+            text=self.tr("workspace_title"),
+            background=BACKGROUND,
+            foreground=TEXT,
+            font=(
+                self.heading_family,
+                FONTS["app_title"]["size"],
+                FONTS["app_title"]["weight"],
+            ),
+        ).grid(
             row=0, column=0, sticky="w"
         )
         self.ttk.Label(
             title_block,
             text=self.tr("subtitle"),
             style="Subtitle.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(1, 0))
+        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
 
-        source_card = self.ttk.Frame(outer, style="Card.TFrame", padding=(18, 15))
-        source_card.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        source_card.columnconfigure(0, weight=1)
-        source_header = self.ttk.Frame(source_card, style="Card.TFrame")
-        source_header.grid(row=0, column=0, sticky="ew", pady=(2, 11))
+        workspace = self.ttk.Frame(outer, style="App.TFrame")
+        workspace.grid(row=1, column=0, sticky="nsew")
+        workspace.columnconfigure(0, weight=3, minsize=480)
+        workspace.columnconfigure(1, weight=2, minsize=300)
+        workspace.rowconfigure(0, weight=1)
+
+        workflow = self.tk.Frame(workspace, background=BACKGROUND)
+        workflow.grid(row=0, column=0, sticky="nsew", padx=(0, 22))
+        workflow.columnconfigure(0, weight=1)
+        workflow.rowconfigure(0, weight=1)
+
+        source_section = self.tk.Frame(workflow, background=BACKGROUND)
+        source_section.grid(row=0, column=0, sticky="nsew")
+        source_section.columnconfigure(0, weight=1)
+        source_section.rowconfigure(1, weight=1)
+        source_header = self.ttk.Frame(source_section, style="App.TFrame")
+        source_header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         source_header.columnconfigure(0, weight=1)
         self.ttk.Label(
             source_header,
@@ -1264,28 +1580,28 @@ class TrackJudgeWindow:
             source_header,
             textvariable=self.source_count_var,
             style="Counter.TLabel",
-        ).grid(row=0, column=1, sticky="e", padx=(18, 2))
+        ).grid(row=0, column=1, sticky="e", padx=(18, 0))
 
-        input_frame = self.tk.Frame(source_card, background=CARD, borderwidth=0)
-        input_frame.grid(row=1, column=0, sticky="ew")
+        input_frame = self.tk.Frame(source_section, background=BACKGROUND, borderwidth=0)
+        input_frame.grid(row=1, column=0, sticky="nsew")
         self.source_text = self.tk.Text(
             input_frame,
-            height=4,
+            height=7,
             wrap="word",
             undo=True,
             background=INPUT,
             foreground=TEXT,
             insertbackground=TEXT,
-            selectbackground="#265370",
+            selectbackground=COLORS["selection"],
             selectforeground=TEXT,
             highlightbackground=BORDER,
-            highlightcolor=ACCENT,
+            highlightcolor=COLORS["border_strong"],
             highlightthickness=1,
             borderwidth=0,
             relief="flat",
-            padx=12,
-            pady=10,
-            font=(self.font_family, 11),
+            padx=13,
+            pady=12,
+            font=(self.font_family, FONTS["body_large"]["size"]),
         )
         self.source_text.pack(fill="both", expand=True)
         self.source_placeholder = self.tk.Label(
@@ -1294,11 +1610,11 @@ class TrackJudgeWindow:
             justify="left",
             anchor="nw",
             background=INPUT,
-            foreground="#6f879a",
-            font=(self.font_family, 11),
+            foreground=COLORS["text_muted"],
+            font=(self.font_family, FONTS["body_large"]["size"]),
             cursor="xterm",
         )
-        self.source_placeholder.place(x=13, y=10)
+        self.source_placeholder.place(x=14, y=12)
         self.source_placeholder.bind("<Button-1>", self._focus_source_input)
         self.source_text.bind("<<Modified>>", self._on_source_modified)
         self.source_text.bind("<Control-KeyPress>", self._on_source_shortcut)
@@ -1307,22 +1623,25 @@ class TrackJudgeWindow:
         self.source_text.bind("<FocusOut>", self._normalize_source_input)
         self.source_error_var = self.tk.StringVar(value=self.tr("source_only_links"))
         self.source_hint = self.ttk.Label(
-            source_card,
+            source_section,
             textvariable=self.source_error_var,
             style="Muted.TLabel",
         )
         self.source_hint.grid(row=2, column=0, sticky="w", pady=(7, 0))
 
-        settings_card = self.ttk.Frame(outer, style="Card.TFrame", padding=(18, 15))
-        settings_card.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        divider = self.tk.Frame(workflow, background=BORDER, height=1)
+        divider.grid(row=1, column=0, sticky="ew", pady=(16, 14))
+
+        settings_card = self.ttk.Frame(workflow, style="Settings.TFrame", padding=(16, 14))
+        settings_card.grid(row=2, column=0, sticky="ew")
         settings_card.columnconfigure(0, weight=1)
         self.ttk.Label(
             settings_card,
             text=self.tr("settings_title"),
-            style="Section.TLabel",
-        ).grid(row=0, column=0, sticky="w", pady=(2, 10))
+            style="SettingsSection.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 10))
         self.output_var = self.tk.StringVar(value=default_dest_folder())
-        output_row = self.ttk.Frame(settings_card, style="Card.TFrame")
+        output_row = self.ttk.Frame(settings_card, style="Settings.TFrame")
         output_row.grid(row=1, column=0, sticky="ew")
         output_row.columnconfigure(0, weight=1)
         self.output_entry = self.ttk.Entry(
@@ -1330,7 +1649,7 @@ class TrackJudgeWindow:
             textvariable=self.output_var,
             style="App.TEntry",
             state="readonly",
-            cursor="arrow",
+            cursor="xterm",
         )
         self.output_entry.grid(row=0, column=0, sticky="ew")
         self.output_browse_button = self.ttk.Button(
@@ -1349,7 +1668,8 @@ class TrackJudgeWindow:
             settings_card,
             text=self.tr("spectrogram_option"),
             variable=self.spectrogram_var,
-            font=(self.font_family, 10),
+            font=(self.font_family, FONTS["body"]["size"]),
+            background=COLORS["surface_subtle"],
         )
         self.spectrogram_check.grid(row=2, column=0, sticky="w", pady=(10, 0))
         self.json_check = StyledCheck(
@@ -1357,7 +1677,8 @@ class TrackJudgeWindow:
             settings_card,
             text=self.tr("json_option"),
             variable=self.json_var,
-            font=(self.font_family, 10),
+            font=(self.font_family, FONTS["body"]["size"]),
+            background=COLORS["surface_subtle"],
         )
         self.json_check.grid(row=3, column=0, sticky="w", pady=(6, 0))
         self.browser_check = StyledCheck(
@@ -1365,15 +1686,16 @@ class TrackJudgeWindow:
             settings_card,
             text=self.tr("browser_option"),
             variable=self.browser_cookies_var,
-            font=(self.font_family, 10),
+            font=(self.font_family, FONTS["body"]["size"]),
+            background=COLORS["surface_subtle"],
         )
         self.browser_check.grid(row=4, column=0, sticky="w", pady=(6, 0))
 
-        action_row = self.ttk.Frame(outer, style="App.TFrame")
-        action_row.grid(row=3, column=0, sticky="ew", pady=(2, 10))
+        action_row = self.ttk.Frame(workflow, style="App.TFrame")
+        action_row.grid(row=3, column=0, sticky="ew", pady=(14, 0))
         action_row.columnconfigure(0, weight=1)
         status_area = self.tk.Frame(action_row, background=BACKGROUND)
-        status_area.grid(row=0, column=0, sticky="w")
+        status_area.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         status_area.columnconfigure(1, weight=1)
         self.loading_spinner = LoadingSpinner(self.tk, status_area)
         self.loading_spinner.grid(row=0, column=0, sticky="w", padx=(0, 9))
@@ -1390,110 +1712,129 @@ class TrackJudgeWindow:
             style="Accent.TButton",
             command=self._start_comparison,
         )
-        self.start_button.grid(row=0, column=1, sticky="e")
+        self.start_button.grid(row=1, column=0, sticky="ew")
 
-        result_card = self.ttk.Frame(outer, style="CardAlt.TFrame", padding=14)
-        result_card.grid(row=4, column=0, sticky="nsew")
-        result_card.columnconfigure(0, weight=1)
-        result_card.rowconfigure(5, weight=1)
-        result_header = self.ttk.Frame(result_card, style="CardAlt.TFrame")
-        result_header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        result_column = self.tk.Frame(workspace, background=BACKGROUND)
+        result_column.grid(row=0, column=1, sticky="nsew")
+        result_column.columnconfigure(0, weight=1)
+        result_column.rowconfigure(4, weight=1)
+        result_header = self.ttk.Frame(result_column, style="App.TFrame")
+        result_header.grid(row=0, column=0, sticky="ew")
         result_header.columnconfigure(0, weight=1)
         self.result_title_var = self.tk.StringVar(value=self.tr("result_placeholder_title"))
         self.result_title_label = self.ttk.Label(
             result_header,
             textvariable=self.result_title_var,
             style="ResultTitle.TLabel",
+            justify="left",
+            wraplength=240,
         )
         self.result_title_label.grid(row=0, column=0, sticky="w")
+
+        self.result_text_var = self.tk.StringVar(value=self.tr("result_placeholder"))
+        self.ttk.Label(
+            result_column,
+            textvariable=self.result_text_var,
+            style="Result.TLabel",
+            justify="left",
+            wraplength=250,
+        ).grid(row=1, column=0, sticky="ew", pady=(10, 9))
+
+        self.result_path_var = self.tk.StringVar(value="")
+        self.ttk.Label(
+            result_column,
+            textvariable=self.result_path_var,
+            style="ResultPath.TLabel",
+            justify="left",
+            wraplength=250,
+        ).grid(row=2, column=0, sticky="w", pady=(0, 13))
+
+        result_actions = self.ttk.Frame(result_column, style="App.TFrame")
+        result_actions.grid(row=3, column=0, sticky="ew")
+        result_actions.columnconfigure(0, weight=1)
+        result_actions.columnconfigure(1, weight=1)
+        self.analysis_button = self.ttk.Button(
+            result_actions,
+            text=self.tr("view_analysis"),
+            style="ResultStrong.TButton",
+            command=self._show_analysis_screen,
+        )
+        self.analysis_button.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 7))
+        self.open_file_button = self.ttk.Button(
+            result_actions,
+            text=self.tr("open_audio"),
+            style="ResultText.TButton",
+            command=self._open_winner,
+        )
+        self.open_file_button.grid(row=1, column=0, sticky="ew", padx=(0, 3))
+        self.open_folder_button = self.ttk.Button(
+            result_actions,
+            text=self.tr("open_folder"),
+            style="ResultText.TButton",
+            command=self._open_output_folder,
+        )
+        self.open_folder_button.grid(row=1, column=1, sticky="ew", padx=(3, 0))
+        self.open_json_button = self.ttk.Button(
+            result_actions,
+            text=self.tr("open_json"),
+            style="ResultText.TButton",
+            command=self._open_json_report,
+        )
+        self.open_json_button.grid(row=2, column=0, columnspan=2, sticky="ew")
+
+        self.tk.Frame(result_column, background=BORDER, height=1).grid(
+            row=5,
+            column=0,
+            sticky="ew",
+            pady=(18, 0),
+        )
+
+        journal_header = self.ttk.Frame(result_column, style="App.TFrame")
+        journal_header.grid(row=6, column=0, sticky="ew", pady=(8, 0))
+        journal_header.columnconfigure(0, weight=1)
         self.log_toggle_button = self.ttk.Button(
-            result_header,
+            journal_header,
             text=self.tr("show_log"),
             style="Secondary.TButton",
             command=self._toggle_log,
         )
-        self.log_toggle_button.grid(row=0, column=1, sticky="e")
-
-        self.result_text_var = self.tk.StringVar(value=self.tr("result_placeholder"))
-        self.ttk.Label(
-            result_card,
-            textvariable=self.result_text_var,
-            style="Result.TLabel",
-            justify="left",
-            wraplength=830,
-        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(7, 8))
-
-        self.result_path_var = self.tk.StringVar(value="")
-        self.ttk.Label(
-            result_card,
-            textvariable=self.result_path_var,
-            style="Result.TLabel",
-            justify="left",
-        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 10))
-
-        result_actions = self.ttk.Frame(result_card, style="CardAlt.TFrame")
-        result_actions.grid(row=3, column=0, columnspan=2, sticky="ew")
-        self.analysis_button = self.ttk.Button(
-            result_actions,
-            text=self.tr("view_analysis"),
-            style="SecondaryStrong.TButton",
-            command=self._show_analysis_screen,
-        )
-        self.analysis_button.grid(row=0, column=0, sticky="w", padx=(0, 9))
-        self.open_file_button = self.ttk.Button(
-            result_actions,
-            text=self.tr("open_audio"),
-            style="SecondaryStrong.TButton",
-            command=self._open_winner,
-        )
-        self.open_file_button.grid(row=0, column=1, sticky="w", padx=(0, 9))
-        self.open_folder_button = self.ttk.Button(
-            result_actions,
-            text=self.tr("open_folder"),
-            style="SecondaryStrong.TButton",
-            command=self._open_output_folder,
-        )
-        self.open_folder_button.grid(row=0, column=2, sticky="w", padx=(0, 9))
-        self.open_json_button = self.ttk.Button(
-            result_actions,
-            text=self.tr("open_json"),
-            style="SecondaryStrong.TButton",
-            command=self._open_json_report,
-        )
-        self.open_json_button.grid(row=0, column=3, sticky="w")
+        self.log_toggle_button.grid(row=0, column=0, sticky="w")
 
         self.log_text = self.tk.Text(
-            result_card,
+            result_column,
             height=7,
             wrap="word",
-            background="#08121e",
-            foreground="#bed0df",
-            selectbackground="#265370",
+            background=INPUT,
+            foreground=COLORS["text_secondary"],
+            selectbackground=COLORS["selection"],
             highlightbackground=BORDER,
             highlightthickness=1,
             borderwidth=0,
             padx=10,
             pady=9,
-            font=(self.mono_family, 10),
+            font=(self.mono_family, FONTS["technical"]["size"]),
             state="disabled",
         )
-        self.log_text.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=(11, 0))
+        self.log_text.grid(row=7, column=0, sticky="nsew", pady=(8, 0))
         self.log_text.grid_remove()
 
         footer = self.tk.Frame(outer, background=BACKGROUND)
-        footer.grid(row=5, column=0, sticky="e", pady=(8, 0))
+        footer.grid(row=2, column=0, sticky="e", pady=(10, 0))
         footer_link = self.tk.Label(
             footer,
             text="by emmzde  ·  github.com/emmzde",
             background=BACKGROUND,
-            foreground="#718da3",
-            font=(self.font_family, 9, "underline"),
+            foreground=COLORS["text_muted"],
+            font=(self.font_family, FONTS["caption"]["size"], "underline"),
             cursor="hand2",
         )
         footer_link.pack()
         footer_link.bind("<Button-1>", lambda _event: self._open_path(GITHUB_URL))
-        footer_link.bind("<Enter>", lambda _event: footer_link.configure(foreground=ACCENT_ACTIVE))
-        footer_link.bind("<Leave>", lambda _event: footer_link.configure(foreground="#718da3"))
+        footer_link.bind("<Enter>", lambda _event: footer_link.configure(foreground=TEXT))
+        footer_link.bind(
+            "<Leave>",
+            lambda _event: footer_link.configure(foreground=COLORS["text_muted"]),
+        )
 
         self._controls = [
             self.source_text,
@@ -1504,28 +1845,6 @@ class TrackJudgeWindow:
             self.browser_check,
         ]
         self._sync_button_states()
-
-    def _build_logo(self, parent: Any) -> None:
-        png_path = resource_path("assets/trackjudge-icon-v2.png")
-        try:
-            image = self.tk.PhotoImage(file=str(png_path))
-            factor = max(1, round(max(image.width(), image.height()) / 60))
-            self.logo_image = image.subsample(factor, factor)
-            self.tk.Label(
-                parent,
-                image=self.logo_image,
-                background=BACKGROUND,
-                borderwidth=0,
-            ).grid(row=0, column=0, sticky="w")
-        except Exception:
-            self.logo_image = None
-            self.tk.Label(
-                parent,
-                text="♫",
-                background=BACKGROUND,
-                foreground=ACCENT,
-                font=(self.heading_family, 35, "bold"),
-            ).grid(row=0, column=0, sticky="w")
 
     def _work_area(self) -> tuple[int, int, int, int]:
         if os.name == "nt":
@@ -1549,8 +1868,8 @@ class TrackJudgeWindow:
 
     def _center_window(self) -> None:
         self.root.update_idletasks()
-        width = min(980, self.root.winfo_screenwidth())
-        height = min(940, self.root.winfo_screenheight())
+        width = min(1080, self.root.winfo_screenwidth())
+        height = min(760, self.root.winfo_screenheight())
         left, top, right, bottom = self._work_area()
         x = max(left, left + (right - left - width) // 2)
         y = max(top, top + (bottom - top - height) // 2)
@@ -1625,7 +1944,7 @@ class TrackJudgeWindow:
         ):
             self.source_placeholder.place_forget()
         else:
-            self.source_placeholder.place(x=13, y=10)
+            self.source_placeholder.place(x=14, y=12)
 
     def _sync_sources(self) -> None:
         self._sync_placeholder()
@@ -1639,14 +1958,17 @@ class TrackJudgeWindow:
                 self.tr("too_many_links", count=len(sources), maximum=MAX_URLS)
             )
             self.source_hint.configure(style="Error.TLabel")
+            self.status_label.configure(style="StatusError.TLabel")
             self.status_var.set(self.tr("status_too_many"))
         elif sources:
             self.source_error_var.set(self.tr("sources_recognized"))
             self.source_hint.configure(style="Muted.TLabel")
+            self.status_label.configure(style="StatusReady.TLabel")
             self.status_var.set(self.tr("status_ready"))
         else:
             self.source_error_var.set(self.tr("source_only_links"))
             self.source_hint.configure(style="Muted.TLabel")
+            self.status_label.configure(style="Status.TLabel")
             self.status_var.set(self.tr("status_need_link"))
         self._sync_button_states()
 
@@ -1697,6 +2019,7 @@ class TrackJudgeWindow:
         self.result_title_label.configure(style="ResultError.TLabel")
         self.result_text_var.set(message)
         self.result_path_var.set("")
+        self.status_label.configure(style="StatusError.TLabel")
         self.status_var.set(message)
 
     def _start_comparison(self) -> None:
@@ -1750,6 +2073,7 @@ class TrackJudgeWindow:
         self.result_title_var.set(self.tr("running_title"))
         self.result_text_var.set(self.tr("running_text"))
         self.result_path_var.set("")
+        self.status_label.configure(style="Status.TLabel")
         self.status_var.set(self.tr("running_status"))
         self._clear_log()
         self._append_log(self.tr("started_log"))
@@ -1832,6 +2156,7 @@ class TrackJudgeWindow:
                 str(report_path) if report_path and Path(report_path).is_file() else None
             )
             self._render_winner_summary(winner, failures)
+            self.status_label.configure(style="StatusReady.TLabel")
             self.status_var.set("")
             self._show_success_notification(winner)
         else:
@@ -1896,37 +2221,54 @@ class TrackJudgeWindow:
 
     def _show_success_notification(self, winner: dict[str, Any]) -> None:
         self._dismiss_notification()
-        overlay = self.tk.Frame(self.content_host, background="#050b12")
+        overlay = self.tk.Frame(self.content_host, background=COLORS["overlay"])
         overlay.place(x=0, y=0, relwidth=1, relheight=1)
         self.notification_overlay = overlay
 
         card = self.tk.Frame(
             overlay,
-            background=CARD,
-            highlightbackground="#31546d",
+            background=CARD_ALT,
+            highlightbackground=BORDER,
             highlightthickness=1,
-            width=720,
-            height=410,
+            width=650,
+            height=360,
         )
         card.place(relx=0.5, rely=0.5, anchor="center")
         card.grid_propagate(False)
         card.columnconfigure(0, weight=1)
 
-        self.tk.Label(
+        status_mark = self.tk.Canvas(
             card,
-            text="✓",
-            background="#123b32",
-            foreground=GREEN,
+            width=52,
+            height=52,
+            background=CARD_ALT,
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        status_mark.create_oval(5, 5, 47, 47, outline=GREEN, width=2)
+        status_mark.create_line(
+            16,
+            27,
+            23,
+            34,
+            37,
+            18,
+            fill=GREEN,
             width=3,
-            height=1,
-            font=(self.heading_family, 24, "bold"),
-        ).grid(row=0, column=0, pady=(32, 15))
+            capstyle="round",
+            joinstyle="round",
+        )
+        status_mark.grid(row=0, column=0, pady=(28, 12))
         self.tk.Label(
             card,
             text=self.tr("completed"),
-            background=CARD,
+            background=CARD_ALT,
             foreground=TEXT,
-            font=(self.heading_family, 22, "bold"),
+            font=(
+                self.heading_family,
+                FONTS["screen_title"]["size"],
+                FONTS["screen_title"]["weight"],
+            ),
         ).grid(row=1, column=0)
 
         name = winner.get("file_name") or Path(self.last_winner_file or "").name
@@ -1935,40 +2277,40 @@ class TrackJudgeWindow:
         self.tk.Label(
             card,
             text=f"{name}\n{score:.1f}/100  •  {quality}",
-            background=CARD,
+            background=CARD_ALT,
             foreground=MUTED,
             justify="center",
-            wraplength=620,
-            font=(self.font_family, 11),
+            wraplength=560,
+            font=(self.font_family, FONTS["body_large"]["size"]),
         ).grid(row=2, column=0, padx=35, pady=(12, 7))
         self.tk.Label(
             card,
             text=shorten_path(self.last_winner_file, 78),
-            background=CARD,
-            foreground="#718da3",
-            font=(self.mono_family, 9),
+            background=CARD_ALT,
+            foreground=COLORS["text_muted"],
+            font=(self.mono_family, FONTS["technical"]["size"]),
         ).grid(row=3, column=0, padx=35, pady=(0, 20))
 
-        actions = self.ttk.Frame(card, style="Card.TFrame")
+        actions = self.ttk.Frame(card, style="CardAlt.TFrame")
         actions.grid(row=4, column=0)
         self.ttk.Button(
             actions,
             text=self.tr("view_analysis"),
-            style="Accent.TButton",
+            style="ModalStrong.TButton",
             command=self._show_analysis_screen,
         ).grid(row=0, column=0, padx=(0, 9))
         self.ttk.Button(
             actions,
             text=self.tr("open_audio"),
-            style="SecondaryStrong.TButton",
+            style="ModalText.TButton",
             command=self._open_winner,
         ).grid(row=0, column=1)
         self.ttk.Button(
             card,
             text=self.tr("return_form"),
-            style="Secondary.TButton",
+            style="ModalText.TButton",
             command=self._dismiss_notification,
-        ).grid(row=5, column=0, pady=(14, 24))
+        ).grid(row=5, column=0, pady=(11, 22))
 
     def _dismiss_notification(self) -> None:
         if self.notification_overlay is not None:
@@ -1995,7 +2337,7 @@ class TrackJudgeWindow:
         self.ttk.Button(
             header,
             text=self.tr("back"),
-            style="SecondaryStrong.TButton",
+            style="Secondary.TButton",
             command=self._close_analysis_screen,
         ).grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 16))
         self.tk.Label(
@@ -2003,14 +2345,18 @@ class TrackJudgeWindow:
             text=self.tr("analysis_title"),
             background=BACKGROUND,
             foreground=TEXT,
-            font=(self.heading_family, 20, "bold"),
+            font=(
+                self.heading_family,
+                FONTS["screen_title"]["size"],
+                FONTS["screen_title"]["weight"],
+            ),
         ).grid(row=0, column=1, sticky="w")
         self.tk.Label(
             header,
             text=self.tr("analysis_subtitle"),
             background=BACKGROUND,
             foreground=MUTED,
-            font=(self.font_family, 10),
+            font=(self.font_family, FONTS["body"]["size"]),
         ).grid(row=1, column=1, sticky="w", pady=(2, 0))
         self.ttk.Button(
             header,
@@ -2073,11 +2419,11 @@ class TrackJudgeWindow:
     def _add_candidate_card(self, parent: Any, candidate: dict[str, Any]) -> None:
         is_winner = int(candidate.get("rank", 0)) == 1
         score = float(candidate.get("score", 0.0))
-        score_color = GREEN if score >= 70 else "#f2b866" if score >= 45 else RED
+        score_color = GREEN if score >= 70 else COLORS["warning"] if score >= 45 else RED
         card = self.tk.Frame(
             parent,
             background=CARD,
-            highlightbackground=ACCENT if is_winner else BORDER,
+            highlightbackground=GREEN if is_winner else BORDER,
             highlightthickness=2 if is_winner else 1,
         )
         card.pack(fill="x", padx=4, pady=(0, 12))
@@ -2092,11 +2438,11 @@ class TrackJudgeWindow:
             top,
             text=f"#{candidate.get('rank', '?')}  {name}{badge}",
             background=CARD,
-            foreground=ACCENT_ACTIVE if is_winner else TEXT,
+            foreground=GREEN if is_winner else TEXT,
             anchor="w",
             justify="left",
             wraplength=720,
-            font=(self.heading_family, 13, "bold"),
+            font=(self.heading_family, FONTS["result_title"]["size"], "bold"),
         ).grid(row=0, column=0, sticky="w")
         self.tk.Label(
             top,
@@ -2109,12 +2455,12 @@ class TrackJudgeWindow:
             top,
             text=shorten_path(str(candidate.get("source", "")), 105),
             background=CARD,
-            foreground="#718da3",
+            foreground=COLORS["text_muted"],
             anchor="w",
-            font=(self.mono_family, 9),
+            font=(self.mono_family, FONTS["technical"]["size"]),
         ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0))
 
-        metrics = self.tk.Frame(card, background=CARD_ALT)
+        metrics = self.tk.Frame(card, background=COLORS["surface_subtle"])
         metrics.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 10))
         values = [
             (
@@ -2137,21 +2483,21 @@ class TrackJudgeWindow:
         ]
         for index, (label, value) in enumerate(values):
             metrics.columnconfigure(index, weight=1)
-            cell = self.tk.Frame(metrics, background=CARD_ALT)
+            cell = self.tk.Frame(metrics, background=COLORS["surface_subtle"])
             cell.grid(row=0, column=index, sticky="ew", padx=12, pady=10)
             self.tk.Label(
                 cell,
                 text=label,
-                background=CARD_ALT,
-                foreground="#7690a5",
-                font=(self.font_family, 9),
+                background=COLORS["surface_subtle"],
+                foreground=COLORS["text_muted"],
+                font=(self.font_family, FONTS["caption"]["size"]),
             ).pack(anchor="w")
             self.tk.Label(
                 cell,
                 text=value,
-                background=CARD_ALT,
+                background=COLORS["surface_subtle"],
                 foreground=TEXT,
-                font=(self.heading_family, 10, "bold"),
+                font=(self.mono_family, FONTS["technical"]["size"], "bold"),
             ).pack(anchor="w", pady=(2, 0))
 
         self.tk.Label(
@@ -2162,7 +2508,7 @@ class TrackJudgeWindow:
             justify="left",
             anchor="w",
             wraplength=860,
-            font=(self.font_family, 10),
+            font=(self.font_family, FONTS["body"]["size"]),
         ).grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 12))
 
         spectrogram_path = candidate.get("saved_spectrogram")
@@ -2189,7 +2535,7 @@ class TrackJudgeWindow:
                 save_button = self.ttk.Button(
                     spectrogram_actions,
                     text=self.tr("save_spectrogram"),
-                    style="SecondaryStrong.TButton",
+                    style="CardText.TButton",
                 )
                 save_button.configure(
                     command=lambda path=str(spectrogram_path), button=save_button: (
@@ -2208,39 +2554,39 @@ class TrackJudgeWindow:
             text=self.tr("spectrogram_missing"),
             background=CARD,
             foreground=MUTED,
-            font=(self.font_family, 10),
+            font=(self.font_family, FONTS["body"]["size"]),
         ).grid(row=row, column=0, sticky="w", padx=18, pady=(0, 16))
 
     def _add_failure_card(self, parent: Any, failure: dict[str, Any]) -> None:
         card = self.tk.Frame(
             parent,
-            background="#291820",
-            highlightbackground="#6b3340",
+            background=COLORS["error_surface"],
+            highlightbackground=RED,
             highlightthickness=1,
         )
         card.pack(fill="x", padx=4, pady=(0, 12))
         self.tk.Label(
             card,
             text=self.tr("source_failed"),
-            background="#291820",
+            background=COLORS["error_surface"],
             foreground=RED,
             font=(self.heading_family, 12, "bold"),
         ).pack(anchor="w", padx=18, pady=(14, 5))
         self.tk.Label(
             card,
             text=str(failure.get("url", "")),
-            background="#291820",
+            background=COLORS["error_surface"],
             foreground=TEXT,
-            font=(self.mono_family, 9),
+            font=(self.mono_family, FONTS["technical"]["size"]),
             wraplength=850,
             justify="left",
         ).pack(anchor="w", padx=18)
         self.tk.Label(
             card,
             text=str(failure.get("reason", self.tr("unknown_error"))),
-            background="#291820",
-            foreground="#e3a8b0",
-            font=(self.font_family, 10),
+            background=COLORS["error_surface"],
+            foreground=RED,
+            font=(self.font_family, FONTS["body"]["size"]),
             wraplength=850,
             justify="left",
         ).pack(anchor="w", padx=18, pady=(6, 14))

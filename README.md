@@ -11,7 +11,15 @@ TrackJudge is a Windows desktop application that downloads up to five versions
 of the same track, evaluates their audio quality, and keeps the best candidate.
 An optional command-line mode is included for automation and development.
 
-![TrackJudge desktop interface](assets/trackjudge-gui.png)
+## Interface
+
+### Comparison workspace
+
+![TrackJudge comparison workspace](assets/trackjudge-gui.png)
+
+### Detailed audio analysis
+
+![TrackJudge detailed audio analysis](assets/trackjudge-analysis.png)
 
 ## What it does
 
