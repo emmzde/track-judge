@@ -4717,56 +4717,130 @@ def _show_startup_error(message: str) -> None:
 
 
 def _prepare_analysis_preview(window: TrackJudgeWindow) -> None:
-    """Create realistic local spectrograms for visual regression screenshots."""
+    """Create an internally consistent demo report for visual regression screenshots."""
     import numpy as np
 
     preview_folder = tempfile.mkdtemp(prefix="trackjudge-analysis-preview-")
     candidates = [
         {
             "rank": 1,
-            "file_name": "reference-mix.opus",
+            "file_name": "reference-master.opus",
             "codec": "opus",
-            "score": 84.6,
-            "effective_cutoff_hz": 20500.0,
+            "score": 100.0,
+            "effective_cutoff_hz": 21000.0,
         },
         {
             "rank": 2,
             "file_name": "alternate-source.m4a",
             "codec": "aac",
-            "score": 76.2,
-            "effective_cutoff_hz": 18600.0,
+            "score": 88.9,
+            "effective_cutoff_hz": 19000.0,
         },
         {
             "rank": 3,
             "file_name": "archive-upload.webm",
             "codec": "opus",
-            "score": 63.8,
-            "effective_cutoff_hz": 16300.0,
-        },
-        {
-            "rank": 4,
-            "file_name": "low-bitrate-copy.mp3",
-            "codec": "mp3",
-            "score": 45.1,
-            "effective_cutoff_hz": 12800.0,
+            "score": 20.0,
+            "effective_cutoff_hz": 16000.0,
         },
     ]
     frequencies = np.linspace(0.0, 24000.0, 180)
     times = np.linspace(0.0, 210.0, 420)
     for index, candidate in enumerate(candidates):
         cutoff = float(candidate["effective_cutoff_hz"])
-        envelope = np.exp(-frequencies / (9000.0 - index * 900.0))
-        envelope *= 1.0 / (1.0 + np.exp((frequencies - cutoff) / 320.0))
-        rhythm = 0.34 + 0.66 * np.square(np.sin(times * (0.17 + index * 0.012)))
-        harmonics = 0.72 + 0.28 * np.square(np.sin(frequencies[:, None] / 650.0 + times / 5.0))
-        spectrum = envelope[:, None] * rhythm[None, :] * harmonics
-        spectrum += 0.0025 * np.square(np.sin(frequencies[:, None] / 3100.0 + times / 13.0))
+        rng = np.random.default_rng(7300 + index)
+
+        # A dense musical texture: spectral tilt, changing sections, horizontal
+        # harmonic bands and short broadband transients.  The previous fixture
+        # used diagonal sine bands, which looked unlike an audio spectrogram.
+        spectral_tilt = np.exp(-frequencies / (7600.0 - index * 450.0))
+        cutoff_drift = rng.normal(0.0, 1.0, times.size)
+        drift_kernel = np.hanning(35)
+        drift_kernel /= np.sum(drift_kernel)
+        cutoff_drift = np.convolve(cutoff_drift, drift_kernel, mode="same")
+        cutoff_drift /= max(float(np.std(cutoff_drift)), 1.0e-9)
+        local_cutoff = (
+            cutoff
+            + 260.0 * np.sin(times / 8.7 + index * 0.4)
+            + 135.0 * np.sin(times / 2.9 + 1.2)
+            + 190.0 * cutoff_drift
+        )
+        cutoff_mask = 1.0 / (
+            1.0 + np.exp((frequencies[:, None] - local_cutoff[None, :]) / 145.0)
+        )
+        section_times = np.linspace(times[0], times[-1], 22)
+        section_levels = rng.uniform(0.16, 1.0, section_times.size)
+        section_levels[0] *= 0.18
+        section_levels[-1] *= 0.12
+        sections = np.interp(times, section_times, section_levels)
+
+        noise = rng.random((frequencies.size, times.size))
+        kernel = np.ones(9) / 9.0
+        texture = np.apply_along_axis(
+            lambda row, smoothing_kernel=kernel: np.convolve(
+                row,
+                smoothing_kernel,
+                mode="same",
+            ),
+            1,
+            noise,
+        )
+        spectrum = np.full((frequencies.size, times.size), 2.0e-10)
+        spectrum += (
+            spectral_tilt[:, None]
+            * cutoff_mask
+            * sections[None, :]
+            * (2.0e-6 + 0.012 * np.power(texture, 4.0))
+        )
+
+        harmonic_bands = np.zeros_like(spectrum)
+        fundamental = 92.0 + 7.0 * np.sin(times / 16.0)
+        for harmonic in range(1, 70):
+            center = fundamental * harmonic
+            width = 15.0 + harmonic * 1.15
+            band = np.exp(-0.5 * ((frequencies[:, None] - center[None, :]) / width) ** 2)
+            phrase = 0.03 + 0.97 * np.square(
+                np.sin(times * (0.052 + (harmonic % 7) * 0.006) + harmonic * 0.71)
+            )
+            harmonic_bands += band * phrase[None, :] * (0.34 / np.sqrt(harmonic))
+
+        second_fundamental = 173.0 + 11.0 * np.sin(times / 11.0 + 0.8)
+        for harmonic in range(1, 56):
+            center = second_fundamental * harmonic
+            width = 18.0 + harmonic * 1.35
+            band = np.exp(-0.5 * ((frequencies[:, None] - center[None, :]) / width) ** 2)
+            phrase = 0.02 + 0.98 * np.square(
+                np.sin(times * (0.067 + (harmonic % 5) * 0.008) + harmonic * 0.43)
+            )
+            harmonic_bands += band * phrase[None, :] * (0.19 / np.sqrt(harmonic))
+        spectrum += harmonic_bands * cutoff_mask * sections[None, :]
+
+        transients = np.zeros(times.size)
+        beat = 0.8
+        while beat < times[-1]:
+            beat += rng.uniform(0.55, 4.3)
+            width = rng.uniform(0.07, 0.34)
+            amplitude = rng.uniform(0.18, 1.0)
+            transients += amplitude * np.exp(-0.5 * ((times - beat) / width) ** 2)
+        spectrum += (
+            0.62
+            * spectral_tilt[:, None]
+            * cutoff_mask
+            * transients[None, :]
+        )
+
+        # Encoders leave weak, intermittent residue above the measured edge.
+        # It should be visible at full size without forming a perfect boundary.
+        residue = rng.random((frequencies.size, times.size)) ** 12
+        spectrum += 2.5e-7 * spectral_tilt[:, None] * residue
+        reference_band = (frequencies >= 1000.0) & (frequencies <= 5000.0)
+        reference_level = float(np.median(np.median(spectrum, axis=1)[reference_band]))
         output = str(Path(preview_folder) / f"candidate-{index + 1}.png")
         render_spectrogram(
             frequencies,
             times,
             spectrum,
-            float(np.max(spectrum)),
+            reference_level,
             24000.0,
             cutoff,
             cutoff,

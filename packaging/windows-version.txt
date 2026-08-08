@@ -16,12 +16,12 @@ VSVersionInfo(
         [
           StringStruct('CompanyName', 'Emil'),
           StringStruct('FileDescription', 'TrackJudge audio comparison desktop app'),
-          StringStruct('FileVersion', '1.2.0'),
+          StringStruct('FileVersion', '1.2.1'),
           StringStruct('InternalName', 'TrackJudge'),
           StringStruct('LegalCopyright', 'Copyright (c) 2026 Emil'),
           StringStruct('OriginalFilename', 'TrackJudge.exe'),
           StringStruct('ProductName', 'TrackJudge'),
-          StringStruct('ProductVersion', '1.2.0')
+          StringStruct('ProductVersion', '1.2.1')
         ]
       )
     ]),
