@@ -9,7 +9,7 @@
 #endif
 
 #define MyAppName "TrackJudge"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "emmzde"
 #define MyAppURL "https://github.com/emmzde"
 #define MyAppExeName "TrackJudge.exe"
@@ -45,7 +45,7 @@ ChangesAssociations=no
 ChangesEnvironment=no
 UsePreviousAppDir=yes
 SetupLogging=yes
-VersionInfoVersion=1.1.0.0
+VersionInfoVersion=1.2.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} installer
 VersionInfoProductName={#MyAppName}
