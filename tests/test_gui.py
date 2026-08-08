@@ -10,6 +10,7 @@ from trackjudge.gui import (
     extract_sources,
     shorten_path,
 )
+from trackjudge.theme import CORE_COLORS, FONTS, SIZES, apply_font_scale, build_theme_colors
 
 
 def test_gui_options_map_to_analysis_arguments(tmp_path) -> None:
@@ -33,6 +34,50 @@ def test_gui_options_map_to_analysis_arguments(tmp_path) -> None:
     assert args.no_color is True
     assert args.pause == 0
     assert args.browser_cookies == "auto"
+
+
+def test_single_theme_matches_the_reference_palette_and_geometry() -> None:
+    colors = build_theme_colors()
+
+    for token in (
+        "canvas",
+        "surface",
+        "surface_muted",
+        "ink",
+        "muted",
+        "sidebar",
+        "portfolio",
+        "asset_lilac",
+        "asset_mint",
+        "asset_sand",
+    ):
+        assert colors[token] == CORE_COLORS[token]
+
+    assert colors["sidebar"] == "#222222"
+    assert colors["portfolio"] == "#E5F1FD"
+    assert colors["surface"] == "#F7F6F2"
+    assert colors["surface"] != "#FFFFFF"
+    assert SIZES["window_width"] == 1120
+    assert SIZES["window_height"] == 720
+    assert SIZES["portfolio_height"] == 194
+    assert SIZES["analysis_height"] == 300
+    assert SIZES["spectrogram_width"] == 520
+    assert SIZES["spectrogram_height"] == 236
+
+
+def test_fullscreen_font_scale_uses_larger_physical_pixels() -> None:
+    try:
+        apply_font_scale(1.0)
+        baseline = {role: FONTS[role]["size"] for role in ("screen_title", "body", "label")}
+
+        apply_font_scale(1.35)
+
+        assert abs(FONTS["screen_title"]["size"]) > abs(baseline["screen_title"])
+        assert abs(FONTS["body"]["size"]) > abs(baseline["body"])
+        assert abs(FONTS["label"]["size"]) > abs(baseline["label"])
+        assert FONTS["heading"] is FONTS["panel_title"]
+    finally:
+        apply_font_scale(1.0)
 
 
 def test_queue_writer_emits_complete_log_lines() -> None:

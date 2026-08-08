@@ -1,196 +1,101 @@
 # TrackJudge
 
-[**English**](README.md) | [Русский](README.ru.md)
-
-[![Version](https://img.shields.io/badge/version-v1.1.0-22c55e)](https://github.com/emmzde/track-judge/releases/latest)
-[![Status](https://img.shields.io/badge/status-stable-22c55e)](https://github.com/emmzde/track-judge/releases/latest)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![CI](https://github.com/emmzde/track-judge/actions/workflows/ci.yml/badge.svg)](https://github.com/emmzde/track-judge/actions/workflows/ci.yml)
-
-TrackJudge is a Windows desktop application that downloads up to five versions
-of the same track, evaluates their audio quality, and keeps the best candidate.
-An optional command-line mode is included for automation and development.
-
-## Interface
-
-### Comparison workspace
+**TrackJudge compares up to five releases of the same track with local spectral analysis, then saves the strongest source without re-encoding whenever possible.**
 
 ![TrackJudge comparison workspace](assets/trackjudge-gui.png)
 
-### Detailed audio analysis
+[![Release](https://img.shields.io/github/v/release/emmzde/track-judge?style=flat-square)](https://github.com/emmzde/track-judge/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/emmzde/track-judge/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/emmzde/track-judge/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D4?style=flat-square&logo=windows11&logoColor=white)](https://github.com/emmzde/track-judge/releases/latest)
+[![License](https://img.shields.io/github/license/emmzde/track-judge?style=flat-square)](LICENSE)
 
-![TrackJudge detailed audio analysis](assets/trackjudge-analysis.png)
+[**English**](README.md) · [Русский](README.ru.md)
 
-## What it does
+## See it work
 
-- Accepts up to five YouTube or other supported media links.
-- Downloads the best available audio stream through `yt-dlp`.
-- Compares codec metadata, bitrate, spectral cutoff, high-frequency structure,
-  and stereo correlation.
-- Detects suspicious upscales and stationary high-frequency noise.
-- Saves the winner without re-encoding whenever possible.
-- Generates an optional JSON report and spectrograms for every candidate.
-- Includes Russian, English, and German interface languages.
-- Keeps `yt-dlp` current automatically and rolls back a broken update.
+TrackJudge keeps the full comparison visible: every candidate receives a score, rank, spectral cutoff, and a readable spectrogram instead of hiding the evidence behind the winner.
 
-> TrackJudge is a comparison heuristic, not forensic proof of audio provenance.
-> It works best with different sources of the same recording and master.
+![TrackJudge spectrogram comparison for every candidate](assets/trackjudge-analysis.png)
 
-## Download
+## Why
 
-### Windows installer — recommended
+I built TrackJudge because generic downloaders often returned aggressively compressed audio when all I wanted was the highest-quality Opus stream available. Then I noticed that the same track can exist across several channels and uploads, so I automated the repetitive work of downloading every version and deciding which source is actually the strongest.
 
-[Download TrackJudge Setup](https://github.com/emmzde/track-judge/releases/latest/download/TrackJudge-Setup-Windows-x64.exe)
+## Key features
 
-Run the installer once. It installs TrackJudge for the current Windows user and
-creates shortcuts on the desktop and in the Start menu. Python, FFmpeg,
-FFprobe, `yt-dlp`, and all required libraries are included.
+- **Evidence-based ranking** — combines codec metadata, bitrate, STFT spectral cutoff, high-frequency structure, and stereo correlation instead of trusting a filename or container label.
+- **Local, private analysis** — audio is analyzed on the machine; TrackJudge does not upload tracks, reports, or browser cookies to its own service.
+- **Every candidate stays inspectable** — generates a ranked gallery of full-size spectrograms and an optional machine-readable JSON report.
+- **No unnecessary quality loss** — saves the winning source without re-encoding whenever the source format allows it.
+- **Resilient media extraction** — keeps `yt-dlp` current, verifies updates, and rolls back automatically when a new build cannot extract a source.
 
-Before an online comparison, TrackJudge checks for a current `yt-dlp` build.
-Updates are stored under the current Windows user's local app data, verified by
-the official updater, and never overwrite the bundled fallback copy. If a new
-build cannot download any source, TrackJudge restores the previous working
-version and retries.
+> TrackJudge is a comparison heuristic, not forensic proof of audio provenance. It works best when the candidates are different uploads of the same recording and master.
 
-### Portable version
+## Tech stack
 
-[Download the portable ZIP](https://github.com/emmzde/track-judge/releases/latest/download/TrackJudge-Windows-x64.zip)
+| Layer | Technology | Role |
+| --- | --- | --- |
+| Desktop application | ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) ![Tk](https://img.shields.io/badge/Tk-custom_UI-222222) | DPI-aware Windows UI, CLI, orchestration, and lifecycle |
+| Signal processing | ![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy) ![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white) | STFT analysis, spectral measurements, and correlation |
+| Visual evidence | ![Matplotlib](https://img.shields.io/badge/Matplotlib-11557C) | Theme-matched spectrogram rendering |
+| Media pipeline | ![yt--dlp](https://img.shields.io/badge/yt--dlp-extraction-E5DEF0) ![FFmpeg](https://img.shields.io/badge/FFmpeg-conversion-007808?logo=ffmpeg) | Best-stream selection, probing, decoding, and remuxing |
+| Delivery | ![PyInstaller](https://img.shields.io/badge/PyInstaller-portable-A9D7F8) ![Inno Setup](https://img.shields.io/badge/Inno_Setup-installer-F6F0D8) | Self-contained portable ZIP and Windows installer |
 
-Extract the archive and launch `TrackJudge.exe`. The portable build does not
-create shortcuts or modify `PATH`. Its automatically updated `yt-dlp` runtime
-copy is stored in the current Windows user's local app data.
+## Architecture
 
-Unsigned builds can trigger a Windows SmartScreen warning. SHA-256 checksum
-files are attached to every release.
+The GUI and CLI are thin entry points over the same analysis engine. Downloads are intentionally sequential to avoid extractor throttling, while independent DSP jobs run concurrently; one deterministic ranker then produces the saved winner and all review artifacts.
 
-## Using the app
+```mermaid
+flowchart LR
+    GUI["Tk desktop UI"] --> CORE["Shared orchestration"]
+    CLI["CLI"] --> CORE
+    UPDATE["Verified yt-dlp updater"] --> MEDIA["yt-dlp + FFmpeg"]
+    CORE --> MEDIA
+    MEDIA --> DSP["Concurrent local DSP workers"]
+    DSP --> RANK["Deterministic quality ranker"]
+    RANK --> WINNER["Winner without re-encoding"]
+    RANK --> EVIDENCE["Spectrogram gallery + JSON report"]
+```
 
-1. Paste one to five links for different versions of the same track.
-2. Choose where the winning audio file should be saved.
-3. Select whether to create spectrograms and a JSON report.
-4. Click **Start comparison**.
-5. Review the result, detailed scores, warnings, and spectrograms.
+## Installation / quick start
 
-Temporary reports and spectrograms are cleaned up when the app closes unless
-you explicitly save a copy.
+### Windows installer
 
-## Developer setup
+[Download the latest TrackJudge installer](https://github.com/emmzde/track-judge/releases/latest/download/TrackJudge-Setup-Windows-x64.exe), run it, and launch TrackJudge from the Start menu. Python, FFmpeg, FFprobe, `yt-dlp`, and the analysis libraries are included.
 
-```bash
+The [portable ZIP](https://github.com/emmzde/track-judge/releases/latest/download/TrackJudge-Windows-x64.zip) is also available and does not modify `PATH` or create shortcuts. Unsigned builds may trigger Windows SmartScreen; SHA-256 files are attached to every release.
+
+### Run from source
+
+```powershell
 git clone https://github.com/emmzde/track-judge.git
 cd track-judge
 python -m venv .venv
-```
-
-Activate the environment:
-
-```powershell
-# Windows PowerShell
 .\.venv\Scripts\Activate.ps1
-```
-
-```bash
-# Linux or macOS
-source .venv/bin/activate
-```
-
-Install the project with development and spectrogram dependencies:
-
-```bash
-python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
-```
-
-FFmpeg and FFprobe must be available on `PATH` when running from source.
-
-Launch the GUI:
-
-```bash
 trackjudge-gui
 ```
 
-Run the test suite:
+FFmpeg and FFprobe must be available on `PATH` when running from source. Use `trackjudge --help` for the optional CLI workflow.
 
-```bash
+### Validate a checkout
+
+```powershell
 ruff check .
 ruff format --check .
 pytest
 ```
 
-## Optional command-line mode
+## Roadmap / known limitations
 
-Compare online sources:
-
-```bash
-trackjudge "URL_1" "URL_2" "URL_3"
-```
-
-Compare local audio files:
-
-```bash
-trackjudge ./candidate-a.flac ./candidate-b.m4a
-```
-
-Save a spectrogram and JSON report:
-
-```bash
-trackjudge "URL_1" "URL_2" \
-  --spectrogram \
-  --json-report \
-  --output ./results
-```
-
-Run `trackjudge --help` to see every option.
-
-## How the ranking works
-
-For each candidate TrackJudge:
-
-1. extracts up to five minutes from the center of the track;
-2. normalizes the analysis stream to at most two channels and 48 kHz;
-3. computes an STFT-based median power spectrum;
-4. estimates the effective and raw spectral cutoff;
-5. measures modulation and correlation in the high-frequency probe band;
-6. applies reliability checks and ranks all valid candidates.
-
-The JSON report records codec metadata, duration, cutoff measurements,
-authenticity score, warnings, and output paths.
-
-## Build a Windows release
-
-```powershell
-.\scripts\build-portable.ps1
-.\scripts\build-installer.ps1
-```
-
-The build uses pinned and checksum-verified `yt-dlp` and FFmpeg releases,
-performs GUI and audio smoke tests, and produces:
-
-- `dist/TrackJudge-Windows-x64.zip`
-- `dist/TrackJudge-Setup-Windows-x64.exe`
-- matching SHA-256 files
-
-Pushing a `v*` Git tag runs the same release pipeline through GitHub Actions.
-The repository also runs a weekly YouTube extraction smoke test and receives
-weekly dependency update proposals through Dependabot.
-
-## Legal and security notes
-
-Only download media that you are authorized to access and store. Browser
-cookies are used only after an anti-bot response and are never saved by
-TrackJudge. Common cookie filenames and generated media are excluded by
-`.gitignore`.
-
-Third-party components and their licenses are documented in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Portable builds include the
-notices shipped with the bundled FFmpeg distribution.
-
-Automatic `yt-dlp` updates use the official nightly channel. Set
-`TRACKJUDGE_DISABLE_YTDLP_UPDATE=1` before launching the app to disable them,
-or set `TRACKJUDGE_YTDLP_CHANNEL=stable` to stay on stable releases.
+- Quality scores are deterministic heuristics, not proof of the original master or encoder history.
+- Online extraction depends on source availability and upstream anti-bot changes; the managed updater reduces, but cannot eliminate, those failures.
+- The packaged desktop release currently targets Windows; the analysis engine and CLI can run from source on other platforms.
+- Windows binaries are not code-signed yet, so SmartScreen may warn on first launch.
 
 ## License
 
-TrackJudge is released under the [MIT License](LICENSE).
+TrackJudge is released under the [MIT License](LICENSE). Third-party components and their licenses are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Created by [emmzde](https://github.com/emmzde).

@@ -7,9 +7,11 @@ import pytest
 from scipy.io import wavfile
 
 from trackjudge.app import (
+    HAS_MPL,
     analyze_file,
     apply_duration_cap,
     quality_label,
+    render_spectrogram,
     safe_correlation,
 )
 
@@ -87,3 +89,28 @@ def test_duration_cap_and_labels() -> None:
 def test_safe_correlation_rejects_constant_or_invalid_results() -> None:
     assert safe_correlation(np.ones(32), np.ones(32)) is None
     assert safe_correlation(np.arange(32), np.arange(32)) == pytest.approx(1.0)
+
+
+@pytest.mark.skipif(not HAS_MPL, reason="matplotlib is optional")
+def test_spectrogram_uses_the_single_application_theme(tmp_path: Path) -> None:
+    frequencies = np.linspace(0, 24_000, 96)
+    times = np.linspace(0, 8, 64)
+    spectrum = np.outer(
+        np.linspace(1.0, 0.05, len(frequencies)),
+        0.5 + 0.5 * np.sin(times)[None, :].ravel(),
+    )
+    output = tmp_path / "spectrogram.png"
+    render_spectrogram(
+        frequencies,
+        times,
+        spectrum,
+        ref_level=1.0,
+        nyq=24_000,
+        eff_cutoff=19_000,
+        raw_cutoff=20_000,
+        fake_noise=False,
+        out_path=str(output),
+        title="Theme verification",
+    )
+    assert output.is_file()
+    assert output.stat().st_size > 0
