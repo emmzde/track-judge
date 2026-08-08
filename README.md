@@ -1,6 +1,6 @@
 # TrackJudge
 
-**TrackJudge compares up to five releases of the same track with local spectral analysis, then saves the strongest source without re-encoding whenever possible.**
+**TrackJudge downloads up to five releases of the same track with `yt-dlp`, compares them locally by spectrum, and saves the strongest source without re-encoding whenever possible.**
 
 ![TrackJudge comparison workspace](assets/trackjudge-gui.png)
 

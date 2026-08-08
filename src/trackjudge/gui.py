@@ -4765,9 +4765,7 @@ def _prepare_analysis_preview(window: TrackJudgeWindow) -> None:
             + 135.0 * np.sin(times / 2.9 + 1.2)
             + 190.0 * cutoff_drift
         )
-        cutoff_mask = 1.0 / (
-            1.0 + np.exp((frequencies[:, None] - local_cutoff[None, :]) / 145.0)
-        )
+        cutoff_mask = 1.0 / (1.0 + np.exp((frequencies[:, None] - local_cutoff[None, :]) / 145.0))
         section_times = np.linspace(times[0], times[-1], 22)
         section_levels = rng.uniform(0.16, 1.0, section_times.size)
         section_levels[0] *= 0.18
@@ -4822,12 +4820,7 @@ def _prepare_analysis_preview(window: TrackJudgeWindow) -> None:
             width = rng.uniform(0.07, 0.34)
             amplitude = rng.uniform(0.18, 1.0)
             transients += amplitude * np.exp(-0.5 * ((times - beat) / width) ** 2)
-        spectrum += (
-            0.62
-            * spectral_tilt[:, None]
-            * cutoff_mask
-            * transients[None, :]
-        )
+        spectrum += 0.62 * spectral_tilt[:, None] * cutoff_mask * transients[None, :]
 
         # Encoders leave weak, intermittent residue above the measured edge.
         # It should be visible at full size without forming a perfect boundary.
