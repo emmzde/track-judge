@@ -17,6 +17,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -47,11 +54,17 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "${{ github.ref_name }}"
-          "dist/TrackJudge-Windows-x64.zip"
-          "dist/TrackJudge-Windows-x64.zip.sha256"
-          "dist/TrackJudge-Setup-Windows-x64.exe"
-          "dist/TrackJudge-Setup-Windows-x64.exe.sha256"
-          --generate-notes
-          --title "TrackJudge ${{ github.ref_name }}"
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $notes = Join-Path 'docs/releases' "$env:RELEASE_TAG.md"
+          $notesArgs = if (Test-Path -LiteralPath $notes -PathType Leaf) {
+            @('--notes-file', $notes)
+          } else {
+            @('--generate-notes')
+          }
+          gh release create $env:RELEASE_TAG `
+            'dist/TrackJudge-Windows-x64.zip' `
+            'dist/TrackJudge-Windows-x64.zip.sha256' `
+            'dist/TrackJudge-Setup-Windows-x64.exe' `
+            'dist/TrackJudge-Setup-Windows-x64.exe.sha256' `
+            --verify-tag --title "TrackJudge $env:RELEASE_TAG" @notesArgs
