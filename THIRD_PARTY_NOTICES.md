@@ -16,6 +16,14 @@ third-party software under their respective licenses.
 The corresponding package versions are recorded in `BUILD_INFO.txt` inside
 each portable build.
 
+## Desktop interface
+
+The desktop window uses pywebview (BSD-3-Clause), Python.NET (MIT) and Bottle (MIT).
+WebView2 uses the Microsoft Edge WebView2 Runtime installed on Windows.
+The offline client includes React, Radix UI, components adapted from shadcn/ui,
+Tailwind CSS, Lucide, WaveSurfer.js and the Manrope variable font.
+Client dependency notices and the Manrope OFL license ship alongside the web assets.
+
 ## yt-dlp
 
 Portable Windows builds contain the official `yt-dlp.exe` release

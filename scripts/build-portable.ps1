@@ -2,7 +2,8 @@ param(
     [string]$Python = "python",
     [switch]$UseSystemFfmpeg,
     [string]$FfmpegSourceDir,
-    [switch]$SkipArchive
+    [switch]$SkipArchive,
+    [string]$OutputDirectory
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,13 +11,13 @@ $ProjectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $CacheRoot = Join-Path $ProjectRoot ".build-cache"
 $BuildVenv = Join-Path $CacheRoot "build-venv"
 $BuildPython = Join-Path $BuildVenv "Scripts\python.exe"
-$DistRoot = Join-Path $ProjectRoot "dist"
-$PortableDistRoot = if ($SkipArchive) {
-    Join-Path $DistRoot "TrackJudge-Windows-x64"
+$DistRoot = if ($OutputDirectory) {
+    $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
 }
 else {
-    Join-Path $CacheRoot "portable-dist"
+    Join-Path $ProjectRoot "dist"
 }
+$PortableDistRoot = Join-Path $DistRoot "TrackJudge-Windows-x64"
 $PyInstallerWorkRoot = Join-Path $CacheRoot "pyinstaller-work"
 $PortableRoot = Join-Path $PortableDistRoot "TrackJudge"
 $ToolsRoot = Join-Path $PortableRoot "tools"
@@ -146,6 +147,17 @@ if (-not (Test-Path -LiteralPath $BuildPython)) {
     }
 }
 
+Push-Location (Join-Path $ProjectRoot "frontend")
+try {
+    & npm.cmd ci
+    if ($LASTEXITCODE -ne 0) { throw "Frontend dependency installation failed." }
+    & npm.cmd run build
+    if ($LASTEXITCODE -ne 0) { throw "Frontend build failed." }
+}
+finally {
+    Pop-Location
+}
+
 Write-Host "Installing portable build dependencies in the isolated environment"
 & $BuildPython -m pip install --disable-pip-version-check "$ProjectRoot[build]"
 if ($LASTEXITCODE -ne 0) {
@@ -236,7 +248,7 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot "LICENSE") -Destination $Portable
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "README.md") -Destination $PortableRoot -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "THIRD_PARTY_NOTICES.md") -Destination $PortableRoot -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "assets\trackjudge-gui.png") -Destination $AssetsRoot -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "assets\trackjudge-icon-v2.png") -Destination $AssetsRoot -Force
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "frontend\public\brand\trackjudge.png") -Destination $AssetsRoot -Force
 
 $Executable = Join-Path $PortableRoot "TrackJudge.exe"
 $PortableVersionExit = Invoke-WindowsApp -Path $Executable -Arguments @("--headless", "--version")
@@ -257,7 +269,7 @@ if ($GuiPasteSmokeExit -ne 0) {
 $YtDlpVersionLine = (& (Join-Path $ToolsRoot "yt-dlp.exe") --version | Out-String).Trim()
 $FfmpegVersionLine = (& (Join-Path $ToolsRoot "ffmpeg.exe") -version | Select-Object -First 1)
 $PythonVersionLine = (& $BuildPython -c "import platform; print(platform.python_version())").Trim()
-$PythonPackageLines = & $BuildPython -c "import importlib.metadata as m; print('\n'.join(f'{name}: {m.version(name)}' for name in ('numpy', 'scipy', 'rich', 'matplotlib', 'pyinstaller')))"
+$PythonPackageLines = & $BuildPython -c "import importlib.metadata as m; print('\n'.join(f'{name}: {m.version(name)}' for name in ('numpy', 'scipy', 'rich', 'matplotlib', 'pywebview', 'pyinstaller')))"
 $BuildFlavor = if ($FfmpegSourceDir) {
     "Local rebuild (uses the supplied FFmpeg directory)"
 }

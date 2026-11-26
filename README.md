@@ -24,6 +24,8 @@ I built TrackJudge because generic downloaders often returned aggressively compr
 
 ## Key features
 
+- **Audition every candidate** with a seekable waveform. The player uses the same central PCM window as the analysis, up to five minutes. Use Open audio to listen to the entire saved winner.
+
 - **Evidence-based ranking** — combines codec metadata, bitrate, STFT spectral cutoff, high-frequency structure, and stereo correlation instead of trusting a filename or container label.
 - **Local, private analysis** — audio is analyzed on the machine; TrackJudge does not upload tracks, reports, or browser cookies to its own service.
 - **Every candidate stays inspectable** — generates a ranked gallery of full-size spectrograms and an optional machine-readable JSON report.
@@ -36,7 +38,7 @@ I built TrackJudge because generic downloaders often returned aggressively compr
 
 | Layer | Technology | Role |
 | --- | --- | --- |
-| Desktop application | ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) ![Tk](https://img.shields.io/badge/Tk-custom_UI-222222) | DPI-aware Windows UI, CLI, orchestration, and lifecycle |
+| Desktop application | ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) React · shadcn/ui · Tailwind CSS · WebView2 | DPI-aware Windows UI, CLI, orchestration, and lifecycle |
 | Signal processing | ![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy) ![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white) | STFT analysis, spectral measurements, and correlation |
 | Visual evidence | ![Matplotlib](https://img.shields.io/badge/Matplotlib-11557C) | Theme-matched spectrogram rendering |
 | Media pipeline | ![yt--dlp](https://img.shields.io/badge/yt--dlp-extraction-E5DEF0) ![FFmpeg](https://img.shields.io/badge/FFmpeg-conversion-007808?logo=ffmpeg) | Best-stream selection, probing, decoding, and remuxing |
@@ -48,7 +50,7 @@ The GUI and CLI are thin entry points over the same analysis engine. Downloads a
 
 ```mermaid
 flowchart LR
-    GUI["Tk desktop UI"] --> CORE["Shared orchestration"]
+    GUI["WebView2 + React"] --> CORE["Shared orchestration"]
     CLI["CLI"] --> CORE
     UPDATE["Verified yt-dlp updater"] --> MEDIA["yt-dlp + FFmpeg"]
     CORE --> MEDIA
@@ -73,11 +75,13 @@ git clone https://github.com/emmzde/track-judge.git
 cd track-judge
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+npm --prefix frontend ci
+npm --prefix frontend run build
 python -m pip install -e ".[dev]"
 trackjudge-gui
 ```
 
-FFmpeg and FFprobe must be available on `PATH` when running from source. Use `trackjudge --help` for the optional CLI workflow.
+Building the interface requires Node.js 24 and npm. Windows desktop builds use the Microsoft Edge WebView2 Runtime. The fonts and interface assets ship locally. FFmpeg and FFprobe must be available on `PATH` when running from source. Use `trackjudge --help` for the optional CLI workflow.
 
 ### Validate a checkout
 

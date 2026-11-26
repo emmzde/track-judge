@@ -19,6 +19,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build desktop interface
+        working-directory: frontend
+        run: npm ci && npm run build
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:

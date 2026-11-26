@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import queue
-
+from trackjudge.desktop.session import LogBuffer
 from trackjudge.gui import (
     GuiRunConfig,
-    QueueWriter,
     build_gui_namespace,
     candidate_explanation,
     extract_sources,
     shorten_path,
 )
-from trackjudge.theme import CORE_COLORS, FONTS, SIZES, apply_font_scale, build_theme_colors
+from trackjudge.theme import build_theme_colors
 
 
 def test_gui_options_map_to_analysis_arguments(tmp_path) -> None:
@@ -36,60 +34,23 @@ def test_gui_options_map_to_analysis_arguments(tmp_path) -> None:
     assert args.browser_cookies == "auto"
 
 
-def test_single_theme_matches_the_reference_palette_and_geometry() -> None:
+def test_chart_palette_uses_desktop_tokens() -> None:
     colors = build_theme_colors()
-
-    for token in (
-        "canvas",
-        "surface",
-        "surface_muted",
-        "ink",
-        "muted",
-        "sidebar",
-        "portfolio",
-        "asset_lilac",
-        "asset_mint",
-        "asset_sand",
-    ):
-        assert colors[token] == CORE_COLORS[token]
-
-    assert colors["sidebar"] == "#222222"
-    assert colors["portfolio"] == "#E5F1FD"
-    assert colors["surface"] == "#F7F6F2"
-    assert colors["surface"] != "#FFFFFF"
-    assert SIZES["window_width"] == 1120
-    assert SIZES["window_height"] == 720
-    assert SIZES["portfolio_height"] == 194
-    assert SIZES["analysis_height"] == 300
-    assert SIZES["spectrogram_width"] == 520
-    assert SIZES["spectrogram_height"] == 236
+    assert colors["accent"] == "#adf85b"
+    assert colors["canvas"] == "#000000"
+    assert colors["surface"] == "#1c1c1e"
+    assert colors["player_surface"] == "#27272a"
+    assert colors["spectrum_low"] != colors["ink"]
 
 
-def test_fullscreen_font_scale_uses_larger_physical_pixels() -> None:
-    try:
-        apply_font_scale(1.0)
-        baseline = {role: FONTS[role]["size"] for role in ("screen_title", "body", "label")}
-
-        apply_font_scale(1.35)
-
-        assert abs(FONTS["screen_title"]["size"]) > abs(baseline["screen_title"])
-        assert abs(FONTS["body"]["size"]) > abs(baseline["body"])
-        assert abs(FONTS["label"]["size"]) > abs(baseline["label"])
-        assert FONTS["heading"] is FONTS["panel_title"]
-    finally:
-        apply_font_scale(1.0)
-
-
-def test_queue_writer_emits_complete_log_lines() -> None:
-    events: queue.Queue[tuple[str, object]] = queue.Queue()
-    writer = QueueWriter(events)
-
+def test_log_buffer_completes_lines_and_bounds_history() -> None:
+    writer = LogBuffer()
     writer.write("first")
     writer.write(" line\nsecond")
     writer.flush()
-
-    assert events.get_nowait() == ("log", "first line")
-    assert events.get_nowait() == ("log", "second")
+    assert writer.lines() == ["first line", "second"]
+    writer.write("later\n" * 605)
+    assert writer.lines() == ["later"] * 600
 
 
 def test_extract_sources_accepts_mixed_and_adjacent_links() -> None:

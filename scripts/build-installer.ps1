@@ -1,12 +1,18 @@
 param(
     [string]$IsccPath,
-    [string]$PortableSourceDir
+    [string]$PortableSourceDir,
+    [string]$OutputDirectory
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $CacheRoot = Join-Path $ProjectRoot ".build-cache"
-$DistRoot = Join-Path $ProjectRoot "dist"
+$DistRoot = if ($OutputDirectory) {
+    $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
+}
+else {
+    Join-Path $ProjectRoot "dist"
+}
 $InstallerScript = Join-Path $ProjectRoot "packaging\trackjudge-installer.iss"
 $InstallerOutput = Join-Path $DistRoot "TrackJudge-Setup-Windows-x64.exe"
 
@@ -25,8 +31,8 @@ function Resolve-PortableSource {
         return (Resolve-Path -LiteralPath $ConfiguredPath).Path
     }
     $Candidates = @(
-        (Join-Path $CacheRoot "portable-dist\TrackJudge"),
-        (Join-Path $DistRoot "TrackJudge-Windows-x64\TrackJudge")
+        (Join-Path $DistRoot "TrackJudge-Windows-x64\TrackJudge"),
+        (Join-Path $CacheRoot "portable-dist\TrackJudge")
     )
     foreach ($Candidate in $Candidates) {
         if (Test-Path -LiteralPath (Join-Path $Candidate "TrackJudge.exe")) {

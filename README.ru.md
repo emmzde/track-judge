@@ -24,6 +24,8 @@ TrackJudge не прячет доказательства за одной стр
 
 ## Ключевые возможности
 
+- **Предпрослушивание каждой версии.** Волна построена по реальному PCM. Можно переключать кандидатов, перематывать и менять громкость. Для длинных треков плеер воспроизводит центральные пять минут. Кнопка «Открыть аудио» открывает полный файл победителя.
+
 - **Рейтинг на измеряемых признаках** — учитывает кодек, битрейт, спектральный срез STFT, структуру высоких частот и корреляцию стереоканалов, а не верит расширению файла.
 - **Локальный и приватный анализ** — треки обрабатываются на компьютере; TrackJudge не отправляет аудио, отчёты или cookies браузера на собственный сервер.
 - **Проверяем каждый вариант** — строит ранжированную галерею полноразмерных спектрограмм и при необходимости создаёт подробный JSON-отчёт.
@@ -36,11 +38,43 @@ TrackJudge не прячет доказательства за одной стр
 
 | Слой | Технологии | Задача |
 | --- | --- | --- |
-| Десктопное приложение | ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) ![Tk](https://img.shields.io/badge/Tk-custom_UI-222222) | DPI-aware интерфейс Windows, CLI, оркестрация и жизненный цикл |
+| Десктопное приложение | ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) React · shadcn/ui · Tailwind CSS · WebView2 | DPI-aware интерфейс Windows, CLI, оркестрация и жизненный цикл |
 | Обработка сигнала | ![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy) ![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white) | STFT-анализ, спектральные измерения и корреляция |
 | Визуальные доказательства | ![Matplotlib](https://img.shields.io/badge/Matplotlib-11557C) | Спектрограммы в единой теме приложения |
 | Работа с медиа | ![yt--dlp](https://img.shields.io/badge/yt--dlp-extraction-E5DEF0) ![FFmpeg](https://img.shields.io/badge/FFmpeg-conversion-007808?logo=ffmpeg) | Выбор лучшего потока, probing, декодирование и remuxing |
 | Доставка | ![PyInstaller](https://img.shields.io/badge/PyInstaller-portable-A9D7F8) ![Inno Setup](https://img.shields.io/badge/Inno_Setup-installer-F6F0D8) | Автономный portable ZIP и установщик Windows |
+
+## Карта проекта
+
+```text
+src/trackjudge/
+  app.py              CLI, интерактивный мастер и сравнение кандидатов
+  console.py          вывод CLI и подключение журнала окна
+  media.py            поиск инструментов, загрузка, проба, декодирование и экспорт
+  dsp.py              оконное FFT, корреляция каналов, признаки и итоговая оценка
+  spectrum.py         печать спектрограммы в PNG
+  reporting.py        рейтинг, вердикт и JSON
+  gui.py              окно WebView2 и команды интерфейса
+  desktop/
+    dpi.py            масштабирование окна при запуске из исходников
+    window_chrome.py  прозрачная область заголовка и команды окна Windows
+    model.py          параметры запуска, разбор ссылок и объяснения результатов
+    session.py        фоновая задача, журнал, пики и срок жизни предпрослушивания
+    server.py         локальная раздача интерфейса, PNG и PCM с HTTP Range
+    static/           собранный интерфейс для поставки
+  tokens.css          палитра, типографика и размеры интерфейса
+  theme.py            чтение общей палитры для графиков и окна
+  updater.py          проверка, установка и откат yt-dlp
+frontend/
+  src/                студия, рейтинг, плеер, компоненты и переводы
+  public/             изображения карточек и лицензии
+docs/releases/        примечания к выпускам
+tests/                проверки DSP, декодирования, экспорта, окна и обновления
+scripts/              сборка portable ZIP и установщика
+packaging/            точка входа, DPI-манифест, сборочные хуки и Inno Setup
+assets/               иконки и снимки интерфейса
+.github/workflows/    тестирование, проверка загрузчика и выпуск сборок
+```
 
 ## Архитектура
 
@@ -48,7 +82,7 @@ GUI и CLI — тонкие точки входа поверх одного дв
 
 ```mermaid
 flowchart LR
-    GUI["Tk desktop UI"] --> CORE["Общая оркестрация"]
+    GUI["WebView2 + React"] --> CORE["Общая оркестрация"]
     CLI["CLI"] --> CORE
     UPDATE["Проверяемый updater yt-dlp"] --> MEDIA["yt-dlp + FFmpeg"]
     CORE --> MEDIA
@@ -73,11 +107,13 @@ git clone https://github.com/emmzde/track-judge.git
 cd track-judge
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+npm --prefix frontend ci
+npm --prefix frontend run build
 python -m pip install -e ".[dev]"
 trackjudge-gui
 ```
 
-При запуске из исходников FFmpeg и FFprobe должны быть доступны через `PATH`. Опциональный CLI описан в `trackjudge --help`.
+Для сборки интерфейса нужны Node.js 24 и npm. Окно в Windows использует Microsoft Edge WebView2 Runtime. Шрифты и ресурсы интерфейса входят в поставку. При запуске из исходников FFmpeg и FFprobe должны быть доступны через `PATH`. Опциональный CLI описан в `trackjudge --help`.
 
 ### Проверка проекта
 

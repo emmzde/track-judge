@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 
 PROJECT_ROOT = Path(SPECPATH)
@@ -9,19 +9,25 @@ analysis = Analysis(
     [str(PROJECT_ROOT / "packaging" / "portable_entry.py")],
     pathex=[str(PROJECT_ROOT / "src")],
     binaries=[],
-    datas=[
+    datas=collect_data_files("webview", subdir="js") + [
+        (str(PROJECT_ROOT / "src/trackjudge/tokens.css"), "trackjudge"),
+        (str(PROJECT_ROOT / "src/trackjudge/desktop/static"), "trackjudge/desktop/static"),
         (str(PROJECT_ROOT / "README.md"), "."),
         (str(PROJECT_ROOT / "LICENSE"), "."),
         (str(PROJECT_ROOT / "THIRD_PARTY_NOTICES.md"), "."),
-        (str(PROJECT_ROOT / "assets" / "trackjudge-icon-v2.png"), "assets"),
-        (str(PROJECT_ROOT / "assets" / "trackjudge-v2.ico"), "assets"),
     ],
     hiddenimports=collect_submodules("rich._unicode_data"),
-    hookspath=[],
-    hooksconfig={},
+    hookspath=[str(PROJECT_ROOT / "packaging" / "hooks")],
+    hooksconfig={"matplotlib": {"backends": ["Agg"]}},
     runtime_hooks=[],
     excludes=[
         "IPython",
+        "tkinter",
+        "webview.platforms.android",
+        "webview.platforms.cef",
+        "webview.platforms.cocoa",
+        "webview.platforms.gtk",
+        "webview.platforms.qt",
         "jupyter",
         "lxml",
         "notebook",
@@ -51,8 +57,9 @@ executable = EXE(
     upx=False,
     console=False,
     disable_windowed_traceback=True,
-    icon=str(PROJECT_ROOT / "assets" / "trackjudge-v2.ico"),
+    icon=str(PROJECT_ROOT / "frontend" / "public" / "brand" / "trackjudge.ico"),
     version=str(PROJECT_ROOT / "packaging" / "windows-version.txt"),
+    manifest=str(PROJECT_ROOT / "packaging" / "trackjudge.manifest"),
     uac_admin=False,
     contents_directory="_internal",
 )

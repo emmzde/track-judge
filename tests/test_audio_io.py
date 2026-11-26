@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from scipy.io import wavfile
 
-from trackjudge import app, updater
+from trackjudge import media, updater
 from trackjudge.app import (
     ANALYSIS_SAMPLE_RATE,
     _tool_filename,
@@ -68,7 +68,7 @@ def test_managed_ytdlp_takes_priority_over_bundled_copy(
     managed.write_bytes(b"managed yt-dlp")
     monkeypatch.setattr(updater, "auto_update_supported", lambda: True)
     monkeypatch.setattr(updater, "managed_ytdlp_path", lambda: managed)
-    monkeypatch.setattr(app, "find_packaged_tool", lambda _tool: "/bundle/yt-dlp.exe")
+    monkeypatch.setattr(media, "find_packaged_tool", lambda _tool: "/bundle/yt-dlp.exe")
 
     assert find_external_tool("yt-dlp") == str(managed)
 
