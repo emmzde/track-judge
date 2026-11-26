@@ -23,6 +23,8 @@ classifiers = [
 dependencies = [
     "numpy>=1.26",
     "rich>=13.7",
+    "pywebview>=6.2,<7",
+    "bottle>=0.13.4,<1",
     "scipy>=1.11",
     "yt-dlp>=2026.7.4",
 ]
@@ -48,6 +50,9 @@ trackjudge-gui = "trackjudge.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+trackjudge = ["tokens.css", "desktop/static/**/*", "desktop/static/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "trackjudge.__version__"}

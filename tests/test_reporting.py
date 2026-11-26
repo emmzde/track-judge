@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from trackjudge import app
+from trackjudge import app, console
 from trackjudge.app import build_parser, run_interactive_wizard, save_json_report
 
 
@@ -49,7 +49,7 @@ def test_interactive_wizard_collects_sources_and_options(
     source_answers = iter(['"https://example.test/one"', "https://example.test/two", ""])
     confirmation_answers = iter([True, False, True])
 
-    monkeypatch.setattr(app._CONSOLE, "input", lambda *args, **kwargs: next(source_answers))
+    monkeypatch.setattr(console._CONSOLE, "input", lambda *args, **kwargs: next(source_answers))
     monkeypatch.setattr(app.Prompt, "ask", lambda *args, **kwargs: f'"{tmp_path}"')
     monkeypatch.setattr(
         app.Confirm,

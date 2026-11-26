@@ -9,7 +9,7 @@
 #endif
 
 #define MyAppName "TrackJudge"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "emmzde"
 #define MyAppURL "https://github.com/emmzde"
 #define MyAppExeName "TrackJudge.exe"
@@ -32,7 +32,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir={#OutputRoot}
 OutputBaseFilename=TrackJudge-Setup-Windows-x64
-SetupIconFile={#ProjectRoot}\assets\trackjudge-v2.ico
+SetupIconFile={#ProjectRoot}\frontend\public\brand\trackjudge.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile={#ProjectRoot}\LICENSE
 Compression=lzma2/max
@@ -45,7 +45,7 @@ ChangesAssociations=no
 ChangesEnvironment=no
 UsePreviousAppDir=yes
 SetupLogging=yes
-VersionInfoVersion=1.2.1.0
+VersionInfoVersion={#MyAppVersion}.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} installer
 VersionInfoProductName={#MyAppName}

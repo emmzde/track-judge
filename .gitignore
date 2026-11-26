@@ -1,3 +1,7 @@
+# Web client
+node_modules/
+src/trackjudge/desktop/static/
+
 # Python
 __pycache__/
 *.py[cod]
